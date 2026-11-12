@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12T04:50:05.923963+00:00",
+  "title": "Design System: Better Lunch Breaks",
+  "extensions": {
+    "colorMeta": {
+      "navy": {
+        "role": "primary",
+        "displayName": "Navy",
+        "canonical": "#0c2340",
+        "tonalRamp": [
+          "oklch(15% 0.0155 255.53)",
+          "oklch(27% 0.0341 255.53)",
+          "oklch(39% 0.0528 255.53)",
+          "oklch(51% 0.0621 255.53)",
+          "oklch(63% 0.0621 255.53)",
+          "oklch(75% 0.0497 255.53)",
+          "oklch(87% 0.0248 255.53)",
+          "oklch(95% 0.0075 255.53)"
+        ]
+      },
+      "orange": {
+        "role": "primary",
+        "displayName": "Orange",
+        "canonical": "#e87722",
+        "tonalRamp": [
+          "oklch(15% 0.0300 51.44)",
+          "oklch(27% 0.0660 51.44)",
+          "oklch(39% 0.1020 51.44)",
+          "oklch(51% 0.1200 51.44)",
+          "oklch(63% 0.1200 51.44)",
+          "oklch(75% 0.0960 51.44)",
+          "oklch(87% 0.0480 51.44)",
+          "oklch(95% 0.0144 51.44)"
+        ]
+      },
+      "orange-ink": {
+        "role": "primary",
+        "displayName": "Orange Ink",
+        "canonical": "#973e08",
+        "tonalRamp": [
+          "oklch(15% 0.0300 44.77)",
+          "oklch(27% 0.0660 44.77)",
+          "oklch(39% 0.1020 44.77)",
+          "oklch(51% 0.1200 44.77)",
+          "oklch(63% 0.1200 44.77)",
+          "oklch(75% 0.0960 44.77)",
+          "oklch(87% 0.0480 44.77)",
+          "oklch(95% 0.0144 44.77)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f3f5f8",
+        "tonalRamp": [
+          "oklch(15% 0.0011 258.32)",
+          "oklch(27% 0.0025 258.32)",
+          "oklch(39% 0.0039 258.32)",
+          "oklch(51% 0.0045 258.32)",
+          "oklch(63% 0.0045 258.32)",
+          "oklch(75% 0.0036 258.32)",
+          "oklch(87% 0.0018 258.32)",
+          "oklch(95% 0.0005 258.32)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(27% 0.0000 89.88)",
+          "oklch(39% 0.0000 89.88)",
+          "oklch(51% 0.0000 89.88)",
+          "oklch(63% 0.0000 89.88)",
+          "oklch(75% 0.0000 89.88)",
+          "oklch(87% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "#122c49",
+        "tonalRamp": [
+          "oklch(15% 0.0156 252.93)",
+          "oklch(27% 0.0342 252.93)",
+          "oklch(39% 0.0529 252.93)",
+          "oklch(51% 0.0623 252.93)",
+          "oklch(63% 0.0623 252.93)",
+          "oklch(75% 0.0498 252.93)",
+          "oklch(87% 0.0249 252.93)",
+          "oklch(95% 0.0075 252.93)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#536478",
+        "tonalRamp": [
+          "oklch(15% 0.0096 252.71)",
+          "oklch(27% 0.0210 252.71)",
+          "oklch(39% 0.0325 252.71)",
+          "oklch(51% 0.0382 252.71)",
+          "oklch(63% 0.0382 252.71)",
+          "oklch(75% 0.0306 252.71)",
+          "oklch(87% 0.0153 252.71)",
+          "oklch(95% 0.0046 252.71)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#d4dce5",
+        "tonalRamp": [
+          "oklch(15% 0.0038 251.17)",
+          "oklch(27% 0.0083 251.17)",
+          "oklch(39% 0.0128 251.17)",
+          "oklch(51% 0.0151 251.17)",
+          "oklch(63% 0.0151 251.17)",
+          "oklch(75% 0.0121 251.17)",
+          "oklch(87% 0.0060 251.17)",
+          "oklch(95% 0.0018 251.17)"
+        ]
+      },
+      "soft-blue": {
+        "role": "neutral",
+        "displayName": "Soft Blue",
+        "canonical": "#e9eff6",
+        "tonalRamp": [
+          "oklch(15% 0.0029 252.09)",
+          "oklch(27% 0.0063 252.09)",
+          "oklch(39% 0.0097 252.09)",
+          "oklch(51% 0.0114 252.09)",
+          "oklch(63% 0.0114 252.09)",
+          "oklch(75% 0.0091 252.09)",
+          "oklch(87% 0.0046 252.09)",
+          "oklch(95% 0.0014 252.09)"
+        ]
+      },
+      "soft-orange": {
+        "role": "neutral",
+        "displayName": "Soft Orange",
+        "canonical": "#fff0e3",
+        "tonalRamp": [
+          "oklch(15% 0.0059 63.50)",
+          "oklch(27% 0.0131 63.50)",
+          "oklch(39% 0.0202 63.50)",
+          "oklch(51% 0.0237 63.50)",
+          "oklch(63% 0.0237 63.50)",
+          "oklch(75% 0.0190 63.50)",
+          "oklch(87% 0.0095 63.50)",
+          "oklch(95% 0.0028 63.50)"
+        ]
+      },
+      "green": {
+        "role": "secondary",
+        "displayName": "Green",
+        "canonical": "#286248",
+        "tonalRamp": [
+          "oklch(15% 0.0187 161.71)",
+          "oklch(27% 0.0412 161.71)",
+          "oklch(39% 0.0637 161.71)",
+          "oklch(51% 0.0749 161.71)",
+          "oklch(63% 0.0749 161.71)",
+          "oklch(75% 0.0599 161.71)",
+          "oklch(87% 0.0300 161.71)",
+          "oklch(95% 0.0090 161.71)"
+        ]
+      },
+      "soft-green": {
+        "role": "secondary",
+        "displayName": "Soft Green",
+        "canonical": "#edf5ef",
+        "tonalRamp": [
+          "oklch(15% 0.0029 153.67)",
+          "oklch(27% 0.0064 153.67)",
+          "oklch(39% 0.0099 153.67)",
+          "oklch(51% 0.0116 153.67)",
+          "oklch(63% 0.0116 153.67)",
+          "oklch(75% 0.0093 153.67)",
+          "oklch(87% 0.0046 153.67)",
+          "oklch(95% 0.0014 153.67)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "metric": {
+        "displayName": "Dining metric",
+        "purpose": "Tabular availability and wait figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "dialog",
+        "value": "0 20px 70px #06142640",
+        "purpose": "Modal separation above the dimmed page."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-colors",
+        "value": "160ms ease-out",
+        "purpose": "Background and text color transitions."
+      },
+      {
+        "name": "occupancy-width",
+        "value": "220ms ease-out",
+        "purpose": "Meter width update; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile",
+        "value": "760px"
+      },
+      {
+        "name": "narrow",
+        "value": "360px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Implemented action variant.",
+      "html": "<button class=\"ds-button-primary\">Check out</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:22px;min-height:50px;padding:13px 20px;border-radius:7px;font:600 16px Barlow,Arial,sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out;background:var(--navy);color:white;border:1px solid var(--navy)}.ds-button-primary:hover{background:#244769}.ds-button-primary:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Seating action",
+      "kind": "button",
+      "refersTo": "button-seating",
+      "description": "Implemented action variant.",
+      "html": "<button class=\"ds-button-seating\">View seating chart</button>",
+      "css": ".ds-button-seating{display:inline-flex;align-items:center;justify-content:center;gap:22px;min-height:50px;padding:13px 20px;border-radius:7px;font:600 16px Barlow,Arial,sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out;background:var(--orange);color:var(--navy);border:1px solid var(--orange)}.ds-button-seating:hover{background:#f49349}.ds-button-seating:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Implemented action variant.",
+      "html": "<button class=\"ds-button-secondary\">Back to the hall</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:22px;min-height:50px;padding:13px 20px;border-radius:7px;font:600 16px Barlow,Arial,sans-serif;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out;background:transparent;color:var(--navy);border:1px solid #718298}.ds-button-secondary:hover{background:var(--soft-blue)}.ds-button-secondary:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Published URL field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "URL entry in the sticker dialog.",
+      "html": "<input class=\"ds-field\" aria-label=\"Published site URL\" placeholder=\"https://your-name.github.io/Betterlunchbreaks/\">",
+      "css": ".ds-field{width:100%;min-height:48px;border:1px solid #718298;border-radius:6px;padding:11px;color:var(--text);background:white;font:16px Barlow,Arial,sans-serif;caret-color:var(--orange-ink)}.ds-field::placeholder{color:#5a697b}.ds-field:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Selected hall",
+      "kind": "nav",
+      "refersTo": "hall-selected",
+      "description": "Two-line dining hall selection.",
+      "html": "<button class=\"ds-hall\" aria-pressed=\"true\"><strong>The Edge</strong><small>Interactive demo</small></button>",
+      "css": ".ds-hall{min-height:46px;min-width:165px;text-align:left;padding:10px 18px;border:1px solid var(--navy);border-radius:8px;background:var(--navy);color:white;font-family:Barlow,Arial,sans-serif;cursor:pointer}.ds-hall strong{display:block;font-size:17px;font-weight:600}.ds-hall small{display:block;font-size:12px;margin-top:2px;color:#c5d6e9}.ds-hall:hover{background:var(--navy)}.ds-hall:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Forecast card",
+      "kind": "card",
+      "refersTo": "forecast-card",
+      "description": "Dark companion surface with warm current metric.",
+      "html": "<aside class=\"ds-forecast\"><h3>A little planning.<br>A better lunch.</h3><p>Compare now with the sample lunch rush.</p><strong>183</strong><small> seats open \u00b7 demo</small></aside>",
+      "css": ".ds-forecast{background:var(--navy);color:white;border-radius:14px;padding:27px;font-family:Barlow,Arial,sans-serif}.ds-forecast h3{font-size:27px;font-weight:600;line-height:1.12;letter-spacing:-.02em;margin:0}.ds-forecast p{font-size:14px;color:#c5d6e9;margin:11px 0 22px}.ds-forecast strong{color:#ffaf71;font-size:25px;font-weight:600;font-variant-numeric:tabular-nums}.ds-forecast small{color:#c5d6e9;font-size:12px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    },
+    {
+      "name": "Open seat",
+      "kind": "button",
+      "refersTo": "seat-open",
+      "description": "Seat state uses symbol and accessible wording.",
+      "html": "<button class=\"ds-seat\" aria-label=\"Seat 1, open\">\u25cb 1</button>",
+      "css": ".ds-seat{min-width:44px;min-height:46px;border-radius:6px;font:600 15px Barlow,Arial,sans-serif;background:white;color:var(--navy);border:1px solid #667b94;cursor:pointer;transition:background-color 160ms ease-out,color 160ms ease-out}.ds-seat:hover{background:var(--soft-blue)}.ds-seat:focus-visible{outline:3px solid var(--orange-ink);outline-offset:4px}@media(prefers-reduced-motion:reduce){button{transition:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Auburn, between classes",
+    "overview": "Navy structure, warm orange emphasis, and white work areas frame a compact student dining utility. Locally served Barlow gives headings, metrics, and controls a consistent, approachable voice. This Auburn-inspired treatment belongs to an independent student prototype; it does not establish official university affiliation.",
+    "keyCharacteristics": [
+      "Navy anchors and warm orange emphasis.",
+      "Large tabular metrics beside short explanations.",
+      "Flat bordered surfaces and visible control states."
+    ],
+    "rules": [
+      {
+        "name": "The Status Rule",
+        "body": "Seat state remains readable through words and symbols alongside color.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do retain readable demo disclosures and the independent-project attribution.",
+      "Do use words and symbols alongside seat colors.",
+      "Do preserve visible focus, reduced-motion support, and touch-friendly controls."
+    ],
+    "donts": [
+      "Don't introduce official university marks or imply campus endorsement.",
+      "Don't replace compact task content with an oversized marketing hero.",
+      "Don't use color as the sole distinction between open, taken, and personal seats."
+    ]
+  }
+}

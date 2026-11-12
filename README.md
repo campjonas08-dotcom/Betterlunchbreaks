@@ -20,7 +20,9 @@ Open the `Betterlunchbreaks/` path on that local server. Serving the repository 
 4. Verify that URL and `https://campjonas08-dotcom.github.io/Betterlunchbreaks/?table=A1`, including a refresh of the table link. Run the smoke suite against the public URL if reachable.
 5. Open **View seating chart → Print a table sticker**, enter the verified public URL **including `/Betterlunchbreaks/`**, choose a table, and generate/print. Each table gets its own `?table=A1` through `?table=A6` link. Test with an actual phone camera before the pitch. A generated QR is not evidence that the destination has been published.
 
-Current onboarding environment: Git read access succeeded; GitHub API access was blocked at the proxy with a CONNECT 403 for `api.github.com`. The prototype is prepared for pushing to main; no public deployment is claimed verified. Add `api.github.com` to environment network access for API-based deployment checks; usable write/Pages permissions must still be verified. No GitHub token is required merely to read through the existing platform Git proxy.
+GitHub Pages is configured for this repository; its existing `pages build and deployment` workflow was observed completing successfully on GitHub. Updates pushed to `main` use that deployment path. The environment's direct access to `api.github.com` and the Pages hostname remains blocked, so deployment status can be checked through the public repository Actions page, while direct live-site functional validation still requires network access to the Pages hostname.
+
+The Auburn-inspired redesign uses a navy/orange palette, locally served Barlow fonts, a compact mobile overview, and a seating action visible in the tested phone viewport. All previous interaction logic and the synthetic seat model are retained. Product context is in `PRODUCT.md`; the implemented visual system is in `DESIGN.md`. Project-local Impeccable setup and design review records are also included.
 
 ## Demo model and state
 
