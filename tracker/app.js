@@ -2115,6 +2115,8 @@ window.addEventListener('storage', event => {
 });
 document.addEventListener('visibilitychange', () => {if(!document.hidden && !document.querySelector('.overlay')) {loadState(); render();}});
 
+document.getElementById('load-sample-top').onclick=loadSampleData;
+
 (function init(){
   loadState();
   render();

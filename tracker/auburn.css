@@ -42,3 +42,6 @@ input[type=date] { min-width:0; }
 .sample-spending {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;margin:8px 0 4px;border-bottom:1px solid var(--rule);font-size:12px;color:var(--muted);}
 .sample-spending button {flex-shrink:0;background:none;border:0;color:var(--gold);font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px;}
 @media(max-width:370px){.sample-spending{align-items:flex-start;flex-direction:column;gap:0;}}
+.sample-launcher {max-width:620px;margin:18px auto 0;padding:0 20px;display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:13px;color:var(--muted);}
+.sample-launcher button {background:#0c2340;color:white;border:1px solid #0c2340;border-radius:7px;padding:10px 15px;font:inherit;font-weight:600;white-space:nowrap;}
+@media(max-width:370px){.sample-launcher{align-items:flex-start;flex-direction:column;gap:8px;}}
