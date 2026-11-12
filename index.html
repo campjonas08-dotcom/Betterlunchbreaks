@@ -1,72 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0c2340">
-  <meta name="description" content="Plan a better break at Auburn. Explore sample dining availability, find a seat, and try a table check-in in this student prototype.">
-  <title>Better Lunch Breaks · Auburn dining demo</title>
-  <link rel="preload" href="assets/fonts/barlow-regular.ttf" as="font" type="font/ttf" crossorigin>
-  <link rel="stylesheet" href="styles.css">
-  <script defer src="vendor/qrcode.js"></script>
-  <script defer src="data.js"></script>
-  <script defer src="app.js"></script>
-</head>
-<body>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#0c2340">
+<meta name="description" content="Plan your Auburn lunch with estimated dining hall waits and a personal Dining Dollars budget.">
+<title>Better Lunch Breaks · Auburn dining</title>
+<link rel="preload" href="assets/fonts/barlow-regular.ttf" as="font" type="font/ttf" crossorigin><link rel="stylesheet" href="styles.css">
+<script defer src="data.js"></script><script defer src="app.js"></script>
+</head><body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="topbar">
-  <a class="brand" href="./" aria-label="Better Lunch Breaks home">
-    <svg class="brand-icon" viewBox="0 0 44 44" aria-hidden="true"><path d="M8 9v26M14 9v10a3 3 0 0 1-6 0M21 9v26M21 9c12 5 12 17 0 17M33 9v26"/></svg>
-    <span>Better Lunch<span>Breaks<span class="brand-dot">.</span></span></span>
-  </a>
-  <span class="campus">Auburn, between classes.</span>
-  <button id="profile" class="profile" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/></svg><span>Demo student</span></button>
-</header>
+<header class="topbar"><a class="brand" href="./"><svg class="brand-icon" viewBox="0 0 44 44" aria-hidden="true"><path d="M8 9v26M14 9v10a3 3 0 0 1-6 0M21 9v26M21 9c12 5 12 17 0 17M33 9v26"/></svg><span>Better Lunch<span>Breaks<span class="brand-dot">.</span></span></span></a><span class="campus">Auburn, between classes.</span><a class="profile" href="#dollars">Dining Dollars</a></header>
 <main id="main">
-  <div class="intro">
-    <div><h1>Make time for a better break.</h1><p>Find a seat. Plan your lunch. Get back to your day.</p></div>
-    <span class="demo-label">Student prototype · Simulated data</span>
-  </div>
-  <div class="workspace">
-    <aside class="hall-panel" aria-label="Choose a dining hall">
-      <div class="hall-selection"><h2>Where are you headed?</h2>
-        <div class="hall-list" role="group" aria-label="Dining halls">
-          <button class="hall selected" data-hall="edge" aria-pressed="true"><strong>The Edge</strong><small>Interactive demo</small></button>
-          <button class="hall" data-hall="village" aria-pressed="false"><strong>The Village</strong><small>Preview only</small></button>
-        </div>
-      </div>
-      <div class="demo-controls"><button id="reset" class="text-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg>Reset demo</button><p class="local-note">Saved in this browser only.</p></div>
-    </aside>
-    <section id="edge-panel" class="detail" aria-labelledby="hall-title">
-      <div class="detail-heading"><div><h2 id="hall-title">The Edge</h2><p>Central campus <span aria-hidden="true">/</span> Demo dining snapshot</p></div><span class="open-pill"><span aria-hidden="true"></span>Demo hours: open</span></div>
-      <div class="dining-layout">
-        <div class="dining-main">
-          <div class="stats">
-            <div class="capacity"><span class="stat-label">Seats open <span>Demo</span></span><div class="seat-number"><strong id="open-count">183</strong><span>of 324 seats</span></div><p><span id="filled-count">141</span> seats filled</p><div class="meter" aria-hidden="true"><div id="meter-fill"></div></div><span id="crowd" class="crowd">Comfortable · room to settle in</span></div>
-            <div class="wait"><span class="stat-label">Food-line wait <span>Demo</span></span><strong>~7 <span>min</span></strong><p>A sample estimate,<br>not a live queue.</p><svg class="wait-icon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 8v8h6"/></svg></div>
-          </div>
-          <div class="seat-cta"><button id="show-chart" class="primary" aria-expanded="false" aria-controls="seating">View seating chart <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button><span>Explore six sample tables</span></div>
-          <section id="my-seat" class="my-seat" hidden><div><h3>Your demo check-in</h3><strong id="my-seat-label"></strong><p>All done? Open your seat for the next person.</p></div><button id="checkout" class="primary">Check out <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button></section>
-          <div class="recommendation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><div><h3>Have 25 minutes? Consider eating in.</h3><p>Allow about 7 minutes in line, plus walking and eating time. In a hurry? Consider a to-go plate.</p></div></div>
-        </div>
-        <aside class="forecast" aria-labelledby="forecast-title"><div class="forecast-intro"><h3 id="forecast-title">A little planning.<br>A better lunch.</h3><p>Compare now with the sample lunch rush.</p></div><div class="forecast-times"><div class="forecast-now"><span>Now · demo</span><strong id="forecast-open">183</strong><small>seats open</small></div><div><span>12:00 p.m.</span><strong>~50</strong><small>seats open</small></div><div><span>1:30 p.m.</span><strong>~170</strong><small>seats open</small></div></div><p class="forecast-note">Illustrative forecast. Not live predictions.</p></aside>
-      </div>
-      <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true">Ready when you are. Choose an open seat to try the demo.</p>
-      <section id="seating" class="seating" hidden aria-labelledby="seating-title">
-        <div class="section-head"><div><h3 id="seating-title">Find your spot.</h3><p>Window section · Six sample tables</p></div><span class="demo-label">Demo floor plan</span></div>
-        <p><strong id="section-count"></strong>. Hall totals above include all 324 seats.</p>
-        <div class="legend"><span><i class="legend-open" aria-hidden="true">○</i> Open</span><span><i class="legend-taken" aria-hidden="true">×</i> Taken</span><span><i class="legend-mine" aria-hidden="true">✓</i> Your seat</span></div>
-        <div class="floor-plan"><div class="window-label">Windows</div><div id="tables" class="tables"></div><div class="entry-label">Main walkway</div></div>
-        <div class="scan-row"><button id="demo-scan" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 7h3v3H7zm7 0h3v3h-3zM7 14h3v3H7zm7 0v3h3v-3z"/></svg>Try a demo scan · Table A1</button><button id="sticker-open" class="secondary">Print a table sticker</button></div>
-        <p class="local-note">A scan opens a table link. Choose your seat, then check out when you leave. No camera or Tiger ID is needed. Each browser has its own demo state.</p>
-      </section>
-    </section>
-    <section id="preview-panel" class="detail preview" hidden><h2>The Village</h2><span class="demo-label">Dining hall preview</span><p>This hall isn’t part of the interactive prototype yet. Choose The Edge to explore seats, forecasts, and table check-in.</p><button id="back-edge" class="primary">Explore The Edge <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button></section>
-  </div>
-  <details class="about"><summary>About this student prototype</summary><p>ENGR 1100 · Section 002 · Group 2. Synthetic occupancy, waits, forecasts, hours, and floor plan; no campus connection. Each browser has independent state. Manual checkout is required. Forgotten check-outs, accessible seating, privacy, and reliable shared counts need study with Auburn before a pilot.</p></details>
-</main>
-<footer><span class="footer-brand">Better breaks. Better days.</span><span>Made by students, for the in-between.<small>Independent student project · No official Auburn affiliation</small></span></footer>
-<dialog id="table-dialog" aria-labelledby="table-title"><button class="close" data-close aria-label="Close table check-in">×</button><h2 id="table-title"></h2><p class="dialog-context">Table QR check-in · Demo</p><p id="table-help">Choose an open seat. One demo seat per browser.</p><div id="table-seats" class="dialog-seats"></div><p id="table-status" role="status" aria-live="polite"></p><button class="secondary" data-close>Back to the hall</button></dialog>
-<dialog id="profile-dialog" aria-labelledby="profile-title"><button class="close" data-close aria-label="Close profile">×</button><h2 id="profile-title">Hey, Auburn student.</h2><p class="dialog-context">Demo profile</p><p>This is a mock profile. You’re not signed in to Tiger ID, and we don’t collect your student ID or location.</p><p>Demo check-ins are saved only in this browser.</p><button class="primary" data-close>Got it</button></dialog>
-<dialog id="sticker-dialog" aria-labelledby="sticker-title"><button class="close" data-close aria-label="Close sticker generator">×</button><div class="sticker-controls"><h2 id="sticker-title">Make a table sticker.</h2><label for="public-url">Published site URL (including repository path)</label><input id="public-url" type="url" placeholder="https://your-name.github.io/Betterlunchbreaks/"><label for="sticker-table">Demo table</label><select id="sticker-table"></select><button id="generate-sticker" class="primary">Generate QR sticker</button><p id="sticker-status" role="status"></p></div><div id="sticker" hidden><p class="sticker-brand">Better Lunch Breaks</p><h2>Please scan your seat.</h2><p id="sticker-table-label"></p><div id="qr"></div><p>Scan the table, choose an open seat.<br>Check out when you leave.</p><a id="qr-link"></a><p class="local-note">STUDENT PROTOTYPE · BROWSER-LOCAL DEMO</p></div><button id="print-sticker" class="secondary" hidden>Print sticker</button></dialog>
+<div class="intro"><div><h1>A better lunch starts here.</h1><p>Check the crowd. Plan your break. Make your dollars last.</p></div></div>
+<section aria-labelledby="hall-title">
+<div class="detail-heading"><div><h2 id="hall-title">The Edge</h2><p>Estimated availability · Hypothetical scan data</p></div><div class="scenario"><label for="scenario">Explore a dining period</label><select id="scenario"><option value="quiet">Between classes</option><option value="lunch" selected>Lunch building</option><option value="rush">Lunch rush</option></select></div></div>
+<div class="dining-layout"><div class="dining-main">
+<div class="stats"><div class="wait"><span class="stat-label">Estimated wait for a seat</span><strong><span id="wait-count" class="metric-value">0</span> <span>min</span></strong><p id="wait-detail">Seating is likely available.</p><span id="crowd" class="crowd"></span></div><div class="capacity"><span class="stat-label">Roughly open</span><div class="seat-number"><strong id="open-count" class="range-value"></strong></div><p>seats · not assigned or reserved</p><div class="meter" aria-hidden="true"><div id="meter-fill"></div></div><p id="occupancy"></p></div></div>
+<div class="recommendation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><div><h3 id="recommendation-title"></h3><p id="recommendation-copy"></p></div></div>
+<details class="assumptions"><summary>How the estimate works</summary><p>Scan-ins minus scan-outs estimate people inside. We assume 324 seats and a 35-minute average visit. When demand exceeds seats, turnover estimates how soon a seat may open. Rounded ranges allow for people getting food or moving around. These are planning estimates, not guaranteed waits or a food-line prediction.</p><form id="scan-form"><div class="form-grid"><div><label for="entries">Total scan-ins</label><input id="entries" type="number" min="0" max="1000000" step="1" required></div><div><label for="exits">Total scan-outs</label><input id="exits" type="number" min="0" max="1000000" step="1" required></div></div><button class="secondary" type="submit">Calculate from scans</button><p id="scan-status" role="status"></p></form><p id="scan-summary"></p></details>
+</div><aside class="forecast" aria-labelledby="forecast-title"><div class="forecast-intro"><h3 id="forecast-title">Now or a little later?</h3><p>Estimated seating wait if this period’s arrival rate continues.</p></div><div id="forecast" class="forecast-times"></div><p class="forecast-note">Hypothetical inputs. No live campus connection. Food-line and walking time are additional.</p></aside></div>
+</section>
+<section id="dollars" class="budget-section" aria-labelledby="budget-title"><div class="section-head"><div><h2 id="budget-title">Make your Dining Dollars last.</h2><p>Your balance, your spending, your pace.</p></div><a class="text-button" href="#budget-settings">Edit budget</a></div>
+<p class="local-note">Manually tracked and saved in this browser. Not connected to your Auburn account.</p>
+<div class="budget-layout"><div><div id="budget-empty" class="empty-state"><h3>Start with your current balance.</h3><p>Set your term budget below to see how much you can spend each weekday.</p></div><div id="budget-summary" hidden><div class="balance-line"><div><span>Remaining balance</span><strong id="balance"></strong></div><div><span>Per remaining weekday</span><strong id="daily"></strong></div></div><p id="pace"></p><div class="budget-meter" role="meter" aria-label="Term budget remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="budget-meter-fill"></div></div><p id="term-summary" class="local-note"></p></div>
+<form id="purchase-form"><h3>Log a purchase</h3><div class="form-grid"><div><label for="amount">Amount ($)</label><input id="amount" type="number" inputmode="decimal" min="0.01" max="100000" step="0.01" required></div><div><label for="category">Category</label><select id="category"><option>Meal</option><option>Coffee</option><option>Snack</option><option>Groceries</option><option>Other</option></select></div></div><label for="note">Where or what? (optional)</label><input id="note" maxlength="80" placeholder="Lunch at The Edge"><div class="quick-amounts" aria-label="Quick amounts"><button type="button" data-amount="5">$5</button><button type="button" data-amount="8">$8</button><button type="button" data-amount="12">$12</button><button type="button" data-amount="15">$15</button></div><button class="primary" id="log-purchase" type="submit">Log purchase</button></form><p id="budget-status" class="status" role="status" aria-live="polite"></p></div>
+<aside id="budget-settings" class="budget-settings"><h3>Your term budget</h3><p class="local-note">Updating these settings keeps your logged purchases. Balance equals starting balance minus purchases.</p><form id="settings-form"><div class="form-grid"><div><label for="total">Total term budget ($)</label><input id="total" type="number" min="0.01" max="100000" step="0.01" value="500" required></div><div><label for="starting">Starting balance ($)</label><input id="starting" type="number" min="0" max="100000" step="0.01" value="500" required></div><div><label for="start">Term start</label><input id="start" type="date" required></div><div><label for="end">Term end</label><input id="end" type="date" required></div></div><label for="reserve">Keep in reserve ($)</label><input id="reserve" type="number" min="0" max="100000" step="0.01" value="0" required><button class="secondary" type="submit">Save budget</button></form></aside></div>
+<div class="history-head"><h3>Purchase history</h3><button id="export" class="text-button" type="button">Export CSV</button></div><p class="local-note">Remove a purchase to add its amount back to your balance.</p><ul id="history" class="history"></ul>
+</section>
+<details class="about"><summary>About this project &amp; your data</summary><p>Independent student project · ENGR 1100, Section 002, Group 2. Hall scanner totals and dining assumptions are hypothetical. No student identity, location, or campus balance is collected. Your manually entered budget stays in browser storage; separate devices have separate data. Dining Dollars features are adapted from the ideas in <a href="https://github.com/campjonas08-dotcom/Dining-dollar-tracker">Dining Dollar Tracker</a>.</p></details>
+</main><footer><span class="footer-brand">Better breaks. Better days.</span><span>Made by students, for the in-between.<small>No official Auburn affiliation</small></span></footer>
 </body></html>

@@ -1,39 +1,28 @@
-# Validation results
+# Validation — November 12, 2026
 
-Executed November 11, 2026 (America/Chicago) in the managed Linux cloud environment.
+## Current scope
+
+Hall-level estimated seating waits from hypothetical scan-in/out totals, approximate open seating, short-term estimates, and browser-local Dining Dollars. Table selection, seat reservations, check-in/checkout, and QR generation are removed. The Village is excluded. Auburn styling is retained.
 
 ## Passed
 
-`/workspace/.blb-tools/venv/bin/python tests/smoke.py` completed successfully using **Chromium 156.0.8078.79**, Playwright 1.62.0:
+Python Playwright with system Chromium 156.0.8078.79 executed the current `tests/smoke.py` suite at desktop (1440px), phone (390px), and narrow (320px) widths. All three passed:
 
-- Desktop viewport 1440 × 1000.
-- Phone viewport 390 × 844 with mobile and touch emulation.
-- Hall selection and preview return path; seating chart expand/collapse.
-- Initial hall 141 filled / 183 open and visible section 8 filled / 16 open.
-- Occupied-seat feedback, successful check-in, repeated check-in, and second-seat rejection. Successful check-in gives hall 142 / 182 and section 9 / 15, with matching overview/forecast counts.
-- Refresh preserves a check-in. Checkout reopens the seat and reverses the counts.
-- Direct `?table=A2` link and refresh reopen the right dialog. Reset persists across refresh.
-- Invalid table link and unsafe sticker URL rejection.
-- QR stickers for **all six demo tables**: rendered codes decoded with zxing-cpp to the exact GitHub Pages subpath and table query string. This validates QR content, not deployment.
-- Print stylesheet displays the sticker and hides the app navigation.
-- Keyboard skip link, Enter activation, modal tab loop, Escape dismissal, and no horizontal overflow at both tested widths. Keyboard testing exposed a modal focus wrap issue; explicit focus cycling was added and the suite passed afterward.
-- Unavailable-storage fallback keeps check-in usable and reports that persistence will not work.
-- No browser JavaScript exceptions during either viewport run.
+- Normal/rush scenarios, rounded open-seat range, forecast rows, editable scan totals, invalid scan-out rejection, full/empty hall boundaries.
+- Budget setup and balance, reserve, weekday allowance, future and completed terms, preserved purchase history when settings change.
+- Purchase logging in integer cents, rejection above remaining balance, safe note rendering, purchase removal and restored balance.
+- Browser refresh persistence, same-origin tab synchronization, CSV downloads containing logged purchases.
+- No horizontal page overflow or JavaScript errors.
+- No table dialogs or checkout controls and no Village/prototype/demo/early-access wording in rendered initial content.
 
-`node --check app.js`, `node --check data.js`, and `git diff --check` passed. The documented dependency installation was repeated successfully in the dedicated `/workspace/.blb-tools/venv` environment. The local Python HTTP server served the app under `/Betterlunchbreaks/`, exercising repository-relative asset and query paths. Desktop and phone screenshots were inspected; test screenshots are generated outside the repository at `/tmp/blb-test-artifacts`.
+Separate browser checks passed unavailable-storage behavior (visible persistence warning with usable session), corrupt-storage recovery and keyboard skip-link focus. Node estimator boundary checks passed for an empty hall, available seating, full hall, a queue, and nonnegative occupancy. `node --check app.js`, `node --check data.js`, local HTTP serving under `/Betterlunchbreaks/`, and `git diff --check` passed.
 
-## Initial validation limitations
+An initial phone layout overflow in date form columns was diagnosed and corrected using shrinkable grid columns. The complete browser suite passed after that change. Desktop, phone and narrow screenshots were visually inspected in `/tmp/blb-test-artifacts/*-wait-budget.png`. Obsolete seating styles were removed afterward without changing active selectors.
 
-- No physical iPhone/Safari or Android/Chrome was tested. These remain required pre-presentation checks. A WebKit launch was attempted; the WebKit executable is not installed. Chromium mobile emulation is the tested phone layout, not actual Safari or Android.
-- No public deployment was performed. Git read access worked through the existing proxy; the GitHub API request was denied with CONNECT 403 by the network policy. GitHub Pages configuration permissions remain unverified. Follow the README's exact Pages setup steps after pushing the files.
-- No campus data, real Tiger ID, live occupancy, scanner API, cross-device consistency, actual print output, or physical camera scan was tested. These are outside the static prototype or require a published URL/hardware.
-- The external wireframe image and Canvas project files were not available as local inputs; their contents and presentation slot were not independently verified.
+## Limits
 
+Scan data, capacity, visit length, and arrival rates are hypothetical. These checks do not validate real campus occupancy, food-line waits, a campus balance integration, or physical iPhone/Android browsers. The tracker is manually entered and browser-local. No Firebase credentials or cloud sync from the reference tracker were copied.
 
-## Auburn-themed redesign validation
+## Publication
 
-The full acceptance suite was rerun after the navy/orange mobile redesign in Chromium 156.0.8078.79 at 390 × 844 and 1440 × 1000. All prior checks passed, including QR decoding for six tables and unavailable-storage feedback. `app.js`, `data.js`, and the existing acceptance tests are unchanged. No working feature was removed. The primary seating action is fully visible at approximately y=755–807 in the tested 844-pixel phone viewport, versus y=1353 before the redesign. Local fonts and all runtime assets use repository-relative paths.
-
-Impeccable's mechanical detector returned no findings for `index.html` and `styles.css`. An independent finish review identified disclosure labels above headings in the dialogs/preview; these were moved below headings, and the reviewer scored the fix resolved with a final disposition of ship. Fresh desktop/mobile overview, seating, profile, and table-dialog screenshots were reviewed. This is not physical-device validation.
-
-GitHub's public Actions page showed the existing Pages deployment workflow succeeding, confirming Pages was configured. The direct Pages hostname and GitHub API remain denied by this cloud environment's proxy; deployment status and direct-site browser validation are separate checks.
+Deployment evidence is recorded below after publication. Direct access to the GitHub Pages hostname was denied by the running environment's network policy; GitHub repository and Actions pages were accessible. Reusable install/start instructions and the required Pages/API domains were saved in the environment draft. Saving a draft does not apply its settings or publish the environment.

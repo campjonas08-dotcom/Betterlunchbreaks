@@ -1,114 +1,140 @@
 (() => {
   'use strict';
-  const model = window.DiningDemo;
-  const key = 'better-lunch-breaks-v1';
   const $ = id => document.getElementById(id);
-  let checkin = null;
-  let activeTable = null;
-  let storageAvailable = true;
-  try {const stored = JSON.parse(localStorage.getItem(key)); if (model.isValidCheckin(stored)) checkin = stored;} catch {storageAvailable = false;}
-  function announce(message) {$('status').textContent = message;}
-  function save() {
-    try {localStorage.setItem(key, JSON.stringify(checkin)); storageAvailable = true;}
-    catch {storageAvailable = false;}
-    return storageAvailable ? '' : ' Browser storage is unavailable; this check-in will not survive a refresh.';
+  const key = 'better-lunch-budget-v2';
+  const money = cents => (cents / 100).toLocaleString('en-US', {style: 'currency', currency: 'USD'});
+  const dateISO = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const today = () => dateISO(new Date());
+  const validDate = value => typeof value === 'string' && /^20\d\d-\d\d-\d\d$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime()) && dateISO(new Date(`${value}T12:00:00`)) === value;
+  function weekdays(start, end) {
+    let count = 0;
+    for (let day = new Date(`${start}T12:00:00`); dateISO(day) <= end; day.setDate(day.getDate() + 1)) {
+      if (day.getDay() !== 0 && day.getDay() !== 6) count++;
+    }
+    return count;
   }
-  function seatButton(seat, inDialog) {
-    const mine = checkin === seat.id;
-    const taken = seat.taken || mine;
-    const button = document.createElement('button');
-    button.className = `seat ${mine ? 'mine' : taken ? 'taken' : 'available'}`;
-    button.textContent = `${mine ? '✓' : taken ? '×' : '○'} ${seat.id.split('-')[1]}`;
-    button.setAttribute('aria-label', `Seat ${seat.id}, ${mine ? 'your seat' : taken ? 'taken' : 'open'}`);
-    button.dataset.seat = seat.id;
-    button.addEventListener('click', () => {
-      if (inDialog) reserve(seat.id);
-      else openTable(seat.id.split('-')[0]);
-    });
-    return button;
+  const cents = id => Math.round(Number($(id).value) * 100);
+  const validMoney = value => Number.isSafeInteger(value) && value >= 0 && value <= 10000000;
+  function validBudget(b) {
+    return b && validMoney(b.total) && b.total > 0 && validMoney(b.starting) && validMoney(b.reserve) && b.reserve <= b.starting &&
+      validDate(b.start) && validDate(b.end) && b.start <= b.end && Array.isArray(b.purchases) &&
+      b.purchases.every(p => p && typeof p.id === 'string' && validMoney(p.amount) && p.amount > 0 && validDate(p.date) &&
+        typeof p.note === 'string' && typeof p.category === 'string') && new Set(b.purchases.map(p => p.id)).size === b.purchases.length;
   }
-  function render() {
-    const counts = model.counts(checkin);
-    $('open-count').textContent = counts.open;
-    $('filled-count').textContent = counts.filled;
-    $('forecast-open').textContent = counts.open;
-    $('meter-fill').style.width = `${counts.filled / model.total * 100}%`;
-    $('section-count').textContent = `${counts.sectionTotal - counts.sectionFilled} of ${counts.sectionTotal} seats open`;
-    $('tables').replaceChildren(...model.tables.map(table => {
-      const card = document.createElement('div'); card.className = 'table-card';
-      const label = document.createElement('button'); label.className = 'table-name'; label.textContent = `Table ${table.id}`;
-      label.addEventListener('click', () => openTable(table.id)); card.append(label);
-      const seats = document.createElement('div'); seats.className = 'table-seats';
-      table.seats.forEach(s => seats.append(seatButton(s, false))); card.append(seats); return card;
+  let budget = null;
+  function load() {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) {budget = null; return;}
+      const value = JSON.parse(raw);
+      if (!validBudget(value)) throw new Error('Invalid budget');
+      budget = value;
+    } catch {budget = null; $('budget-status').textContent = 'Saved budget could not be read. Set up a budget below; browser storage may be unavailable.';}
+  }
+  function save(message) {
+    try {localStorage.setItem(key, JSON.stringify(budget)); $('budget-status').textContent = message;}
+    catch {$('budget-status').textContent = `${message} Browser storage is unavailable; changes will be lost after a refresh.`;}
+  }
+  let scenario = window.Dining.scenarios.lunch;
+  function renderDining() {
+    const result = window.Dining.estimate(scenario.entries, scenario.exits, 324, 35, scenario.arrivals);
+    $('wait-count').textContent = result.wait;
+    $('open-count').textContent = result.range;
+    $('wait-detail').textContent = result.wait ? 'Allow extra time before a seat opens.' : 'Seating is likely available on arrival.';
+    $('crowd').textContent = result.occupancy > .9 ? 'Busy · consider a quieter period' : result.occupancy > .6 ? 'Filling up · allow a little extra time' : 'Room to settle in';
+    $('meter-fill').style.width = `${result.occupancy * 100}%`;
+    $('occupancy').textContent = `About ${Math.round(result.occupancy * 10) * 10}% of assumed seating in use`;
+    $('recommendation-title').textContent = result.wait ? 'Short break? Consider taking food to go.' : 'Have a break? There’s likely room to eat in.';
+    $('recommendation-copy').textContent = result.wait ? `The estimated seating wait is about ${result.wait} minutes. Add time for food, walking, and eating.` : 'The seating estimate is low. Leave time to get food and walk back to class.';
+    $('scan-summary').textContent = `${scenario.entries} scan-ins − ${scenario.exits} scan-outs = ${result.inside} people inside. Assumed arrivals: ${scenario.arrivals} per minute.`;
+    $('forecast').replaceChildren(...[{minutes: 0, wait: result.wait}, ...result.forecast].map(item => {
+      const row = document.createElement('div');
+      if (!item.minutes) row.className = 'forecast-now';
+      const label = document.createElement('span'); label.textContent = item.minutes ? `In ${item.minutes} min` : 'Now';
+      const value = document.createElement('strong'); value.textContent = `~${item.wait}`;
+      const unit = document.createElement('small'); unit.textContent = 'min wait';
+      row.append(label, value, unit); return row;
     }));
-    $('my-seat').hidden = !checkin;
-    $('my-seat-label').textContent = checkin ? `The Edge · Table ${checkin.split('-')[0]} · Seat ${checkin.split('-')[1]}` : '';
-    if (activeTable) renderTable();
   }
-  function renderTable() {
-    const table = model.tables.find(t => t.id === activeTable);
-    $('table-title').textContent = `The Edge · Table ${table.id}`;
-    $('table-seats').replaceChildren(...table.seats.map(s => seatButton(s, true)));
+  function setScenario() {
+    scenario = {...window.Dining.scenarios[$('scenario').value]};
+    $('entries').value = scenario.entries; $('exits').value = scenario.exits;
+    $('scan-status').textContent = ''; renderDining();
   }
-  function selectHall(id) {
-    document.querySelectorAll('[data-hall]').forEach(b => {
-      const selected = b.dataset.hall === id; b.classList.toggle('selected', selected); b.setAttribute('aria-pressed', String(selected));
-    });
-    $('edge-panel').hidden = id !== 'edge'; $('preview-panel').hidden = id === 'edge';
-  }
-  function showChart() {$('seating').hidden = false; $('show-chart').setAttribute('aria-expanded', 'true');}
-  function openTable(id) {
-    selectHall('edge'); showChart();
-    const table = model.tables.find(t => t.id === id);
-    if (!table) {announce('Invalid table link. Choose a table in the demo seating chart or try a demo scan.'); return;}
-    activeTable = id; renderTable(); $('table-status').textContent = '';
-    if (!$('table-dialog').open) $('table-dialog').showModal();
-  }
-  function reserve(id) {
-    const seat = model.findSeat(id);
-    let message;
-    if (checkin === id) message = `You’re already checked in to seat ${id}. Check out when you leave.`;
-    else if (checkin) message = `You already have seat ${checkin}. Check out before choosing another seat.`;
-    else if (!seat || seat.taken) message = `Seat ${id} is taken. Please choose an open seat marked ○.`;
-    else {checkin = id; const warning = save(); render(); $('table-seats').querySelector(`[data-seat="${id}"]`).focus(); message = `You’re checked in to seat ${id}. Enjoy your break! Remember to check out.${warning}`;}
-    $('table-status').textContent = message; announce(message);
-  }
-  document.querySelectorAll('[data-hall]').forEach(b => b.addEventListener('click', () => {selectHall(b.dataset.hall); announce(b.dataset.hall === 'edge' ? 'The Edge selected. All numbers are demo data.' : 'The Village is a preview. The Edge has the interactive demo.');}));
-  $('back-edge').addEventListener('click', () => selectHall('edge'));
-  $('show-chart').addEventListener('click', () => {const isOpen = !$('seating').hidden; $('seating').hidden = isOpen; $('show-chart').setAttribute('aria-expanded', String(!isOpen)); if (!isOpen) $('seating').scrollIntoView({block: 'start', behavior: 'smooth'});});
-  $('demo-scan').addEventListener('click', () => openTable('A1'));
-  $('checkout').addEventListener('click', () => {const previous = checkin; checkin = null; const warning = save(); render(); announce(`Checked out of seat ${previous}. It is open again.${warning}`);});
-  $('reset').addEventListener('click', () => {checkin = null; const warning = save(); render(); announce(`Demo reset. 141 of 324 seats filled; 183 open.${warning}`);});
-  $('profile').addEventListener('click', () => $('profile-dialog').showModal());
-  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
-  document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('keydown', event => {
-    if (event.key !== 'Tab') return;
-    const controls = [...dialog.querySelectorAll('button, a[href], input, select')].filter(el => el.getClientRects().length && !el.disabled);
-    const first = controls[0], last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last.focus();}
-    else if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first.focus();}
-  }));
-  $('table-dialog').addEventListener('close', () => {activeTable = null;});
-  // Reflect a second tab's check-out/check-in in this browser, without shared server state.
-  window.addEventListener('storage', event => {if (event.key !== key && event.key !== null) return; try {const value = JSON.parse(localStorage.getItem(key)); checkin = model.isValidCheckin(value) ? value : null;} catch {checkin = null;} render(); announce('Demo state updated from another tab in this browser.');});
-  model.tables.forEach(table => {const option = document.createElement('option'); option.value = table.id; option.textContent = `Table ${table.id}`; $('sticker-table').append(option);});
-  $('sticker-open').addEventListener('click', () => {$('sticker-dialog').showModal();});
-  $('generate-sticker').addEventListener('click', () => {
-    let url;
-    try {url = new URL($('public-url').value); if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error();}
-    catch {$('sticker-status').textContent = 'Enter a complete http or https site URL, including its repository path.'; return;}
-    url.search = ''; url.hash = ''; url.searchParams.set('table', $('sticker-table').value);
-    const qr = qrcode(0, 'M'); qr.addData(url.href); qr.make();
-    $('qr').innerHTML = qr.createSvgTag({cellSize: 5, margin: 20, scalable: true});
-    const svg = $('qr').querySelector('svg'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Table check-in QR code');
-    $('qr-link').href = url.href; $('qr-link').textContent = url.href;
-    $('sticker-table-label').textContent = `The Edge · Table ${$('sticker-table').value}`;
-    $('sticker').hidden = false; $('print-sticker').hidden = false;
-    $('sticker-status').textContent = 'Sticker generated. Test the link on the published site before printing for your pitch.';
+  $('scenario').addEventListener('change', setScenario);
+  $('scan-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const entries = Number($('entries').value), exits = Number($('exits').value);
+    if (!Number.isInteger(entries) || !Number.isInteger(exits) || entries < 0 || exits < 0 || entries > 1000000 || exits > entries) {
+      $('scan-status').textContent = 'Use whole scan counts, with scan-outs no greater than scan-ins.'; return;
+    }
+    scenario = {...scenario, entries, exits}; renderDining();
+    $('scan-status').textContent = 'Estimate recalculated from your hypothetical scan totals.';
   });
-  $('print-sticker').addEventListener('click', () => window.print());
-  render();
-  if (!storageAvailable) announce('Browser storage could not be read. You can try the demo; persistence may be unavailable.');
-  const params = new URLSearchParams(location.search);
-  if (params.has('table')) openTable(params.get('table'));
+  function fillSettings() {
+    if (budget) {
+      for (const id of ['total', 'starting', 'reserve']) $(id).value = (budget[id] / 100).toFixed(2);
+      $('start').value = budget.start; $('end').value = budget.end;
+    } else {
+      $('start').value = today(); const end = new Date(); end.setDate(end.getDate() + 111); $('end').value = dateISO(end);
+    }
+  }
+  function renderBudget() {
+    $('budget-empty').hidden = Boolean(budget); $('budget-summary').hidden = !budget;
+    $('log-purchase').disabled = !budget;
+    $('export').disabled = !budget || !budget.purchases.length;
+    $('history').replaceChildren();
+    if (!budget) {const li = document.createElement('li'); li.textContent = 'No purchases yet. Save a budget to get started.'; $('history').append(li); return;}
+    const spent = budget.purchases.reduce((sum, p) => sum + p.amount, 0);
+    const balance = budget.starting - spent;
+    const days = weekdays(budget.start > today() ? budget.start : today(), budget.end);
+    const daily = days ? Math.floor(Math.max(0, balance - budget.reserve) / days) : 0;
+    $('balance').textContent = money(balance); $('daily').textContent = money(daily);
+    const totalDays = weekdays(budget.start, budget.end);
+    const elapsed = Math.max(0, totalDays - days);
+    const allocated = totalDays ? Math.round(Math.max(0, budget.total - budget.reserve) * elapsed / totalDays) : 0;
+    const alreadySpent = Math.max(0, budget.total - budget.starting) + spent;
+    $('pace').textContent = balance < 0 ? 'Your logged purchases exceed your starting balance. Check your entries.' :
+      !days ? 'No weekdays remain in this term. Update your dates to plan your next term.' :
+      balance < budget.reserve ? 'Your balance is below your reserve target.' :
+      today() < budget.start ? 'Your term has not started. Your weekday allowance is ready for the first day.' :
+      `Spending pace: ${alreadySpent > allocated ? `${money(alreadySpent - allocated)} ahead of` : `${money(allocated - alreadySpent)} under`} the weekday plan.`;
+    $('term-summary').textContent = `${days} weekdays remaining · ${money(budget.reserve)} reserved · ${budget.start} to ${budget.end}. Weekends excluded; holidays are included.`;
+    const percent = Math.max(0, Math.min(100, balance / budget.total * 100));
+    $('budget-meter-fill').style.width = `${percent}%`; document.querySelector('.budget-meter').setAttribute('aria-valuenow', String(Math.round(percent)));
+    if (!budget.purchases.length) {const li = document.createElement('li'); li.textContent = 'No purchases logged yet.'; $('history').append(li);}
+    for (const purchase of [...budget.purchases].reverse()) {
+      const li = document.createElement('li'), text = document.createElement('div'), title = document.createElement('strong'), detail = document.createElement('small');
+      title.textContent = purchase.note || purchase.category; detail.textContent = `${purchase.date} · ${purchase.category}`;
+      text.append(title, detail); const amount = document.createElement('span'); amount.textContent = `−${money(purchase.amount)}`;
+      const remove = document.createElement('button'); remove.className = 'text-button'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${purchase.note || purchase.category} ${money(purchase.amount)}`);
+      remove.addEventListener('click', () => {budget.purchases = budget.purchases.filter(p => p.id !== purchase.id); save('Purchase removed and balance restored.'); renderBudget();});
+      li.append(text, amount, remove); $('history').append(li);
+    }
+  }
+  $('settings-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const next = {total: cents('total'), starting: cents('starting'), reserve: cents('reserve'), start: $('start').value, end: $('end').value, purchases: budget?.purchases || []};
+    if (!validBudget(next)) {$('budget-status').textContent = 'Enter valid amounts and term dates from 2000–2099. End must follow start, and reserve cannot exceed starting balance.'; return;}
+    budget = next; save('Budget saved. Your purchase history is unchanged.'); renderBudget();
+  });
+  document.querySelectorAll('[data-amount]').forEach(button => button.addEventListener('click', () => {$('amount').value = button.dataset.amount; $('amount').focus();}));
+  $('purchase-form').addEventListener('submit', event => {
+    event.preventDefault(); const amount = cents('amount');
+    if (!budget) {$('budget-status').textContent = 'Save your term budget before logging a purchase.'; return;}
+    const balance = budget.starting - budget.purchases.reduce((sum, p) => sum + p.amount, 0);
+    if (!validMoney(amount) || amount <= 0 || amount > balance) {$('budget-status').textContent = 'Enter a positive purchase amount within your remaining balance.'; return;}
+    budget.purchases.push({id: crypto.randomUUID(), amount, category: $('category').value, note: $('note').value.trim(), date: today()});
+    save(`${money(amount)} purchase logged.`); $('purchase-form').reset(); renderBudget();
+  });
+  $('export').addEventListener('click', () => {
+    if (!budget) return;
+    // Prefix spreadsheet formula characters in user-supplied cells.
+    const cell = value => `"${String(value).replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;
+    const rows = [['Date', 'Category', 'Note', 'Amount'], ...budget.purchases.map(p => [p.date, p.category, p.note, (p.amount / 100).toFixed(2)])];
+    const url = URL.createObjectURL(new Blob([rows.map(row => row.map(cell).join(',')).join('\r\n')], {type: 'text/csv;charset=utf-8'}));
+    const link = document.createElement('a'); link.href = url; link.download = 'dining-dollars.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  window.addEventListener('storage', event => {if (event.key === key || event.key === null) {load(); fillSettings(); renderBudget();}});
+  setScenario(); load(); fillSettings(); renderBudget();
 })();
