@@ -1,25 +1,17 @@
 # Better Lunch Breaks
 
-## Purpose and users
+## Purpose
 
-Help Auburn students plan a short lunch break with an estimated seating wait, rough seat availability, and a personal Dining Dollars spending plan. This release replaces table selection and QR check-in with hall-level scanner assumptions.
+Give Auburn students a simple dining-day overview and a complete daily Dining Dollars tracker.
 
-## Platform and scope
+## Dining
 
-Static web app deployed to the existing GitHub Pages site. Use the isolated checkout at `/workspace/Betterlunchbreaks`; no new worktree is needed. Keep all runtime assets relative and local. The Edge is the supported hall; The Village is removed.
+Use fixed, made-up wait/seating data. Lunch from 11:30 AM through 1 PM must be the busiest period, with smaller peaks at 9–10 AM and 5–6 PM. Show rough open seating, time selection, nearby waits and an all-day chart. Keep a small sample-data note without live-connection wording or editable scan inputs. The Edge is the supported hall; The Village, table selection and QR/manual check-ins remain removed.
 
-## Dining planning
+## Tracker
 
-Use curated sample data for dining waits, approximate seating, short-term estimates and a visually clear lunch-rush chart. Keep a short sample-data note. Remove live-connection/status wording and editable scanner controls. No table map, seat reservation, QR check-in, or manual checkout.
+Use the full main code from `campjonas08-dotcom/Dining-dollar-tracker` rather than the simplified replacement. Host it at `dollars.html` with Auburn-themed styles and common navigation. Preserve original daily accrual, rollover, earned/available funds, multiple funds, purchases/editing/history, insights, term management and backups. Preserve prior balances/history by migration. See `tracker/PORTING.md`.
 
-## Dining Dollars
+## Platform and quality
 
-Use a separate dollars.html page with Overview, Log purchase, Activity and Settings views. Integrate the central budgeting ideas of `campjonas08-dotcom/Dining-dollar-tracker`: daily accrual, earned funds, available-to-spend rollover, current balance, spending pace, term settings, reserve, quick purchase logging, categories/notes, history/removal, CSV export, local persistence and same-browser tab updates. Do not imply an Auburn balance connection or cross-device sync.
-
-## Design and accessibility
-
-Preserve the incumbent navy/orange Auburn-inspired palette, self-hosted Barlow fonts, compact utility layout, responsive behavior, visible keyboard focus, readable status text and reduced-motion support. Use plain student-facing wording without prototype/demo/early-access labels. State hypothetical data and browser-local storage clearly. Maintain independent student attribution without official affiliation claims.
-
-## Validation
-
-Exercise estimator boundaries, scenario changes and invalid scans; budget calculations, cents, dates, invalid purchases/settings, persistence, cross-tab updates, CSV, safe rendering, unavailable/corrupt storage, keyboard access and desktop/mobile/narrow layout. Physical phone validation and live campus data integration are not covered by browser emulation.
+Static GitHub Pages app with project-relative assets. Use the existing isolated checkout; no worktree needed. Preserve Auburn navy/orange, local Barlow fonts, mobile usability, keyboard focus, readable states and reduced-motion behavior. Do not imply official university affiliation. Validate meaningful app flows at desktop, phone and narrow widths before pushing to main and checking Pages deployment.

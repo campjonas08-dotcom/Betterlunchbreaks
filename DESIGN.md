@@ -112,3 +112,9 @@ Use clear semibold headings, large tabular wait/balance values, short explanator
 ## Product truth
 
 The Edge shows curated sample dining periods and a lunch-rush column chart. A small sample-data note provides context. Open seating is a rounded range; there are no seat maps, reservations, table controls, QR dialogs or manual checkout. Forecasts show sample dining waits. Budget amounts are manually entered and stored in this browser; do not imply campus account integration. Keep the Village excluded and avoid prototype/demo/early-access interface labels.
+
+## Full tracker and daily dining schedule
+
+Dining now shows a fixed all-day schedule with lunch as the highest peak and smaller breakfast/dinner peaks. Meal-period summaries make the timing obvious. The chart scrolls internally on phones and each column selects a time.
+
+The tracker uses the reference app's complete compact UI, navigation, sheets, insights and history rather than the earlier simplified forms. `tracker/auburn.css` maps its palette and typography into the existing navy/orange Barlow identity. A shared site header links back to dining, while the source app's Home, Log, Insights and Settings controls remain available at the bottom. Toasts sit above those controls. Daily budget and available earned funds remain distinct, with the original calculations preserved.

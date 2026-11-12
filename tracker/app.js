@@ -1,0 +1,2080 @@
+/* =========================================================
+   STIPEND — campus funds tracker
+   Persistent storage: localStorage (+ optional Firebase sync,
+   see sync.js). Tracks one or more campus funds — dining dollars,
+   a meal plan, campus cash, bookstore funds, or a custom fund —
+   each accruing evenly across the weekdays of a user-defined term.
+   ========================================================= */
+
+const CONFIG_KEY = 'stipend_config_v5';
+const LEGACY_CONFIG_KEY_V4 = 'auburn_dining_dollars_config_v4';
+const LEGACY_CONFIG_KEY_V3 = 'auburn_dining_dollars_config_v3';
+const LEGACY_HISTORY_KEY_V3 = 'auburn_dining_dollars_history_v3';
+
+const APP_NAME = 'Dining Dollars';
+let storageProblem = false;
+function storageWarning(){ const el = document.getElementById('storage-warning'); if(el){el.hidden = !storageProblem; el.textContent = 'Browser storage is unavailable or could not be read. Export a backup to keep changes before leaving this page.';} }
+
+const FUND_TYPES = [
+  { key:'dining',     label:'Dining Dollars',  emoji:'🍽️' },
+  { key:'mealplan',   label:'Meal Plan',       emoji:'🍴' },
+  { key:'campuscash', label:'Campus Cash',     emoji:'💳' },
+  { key:'bookstore',  label:'Bookstore Funds', emoji:'📚' },
+  { key:'custom',     label:'Custom Fund',     emoji:'🎓' }
+];
+
+const CATEGORIES = [
+  { key:'meal',    label:'Meal',      emoji:'🍽️', color:'#C9A06B' },
+  { key:'coffee',  label:'Coffee',    emoji:'☕', color:'#8B5E34' },
+  { key:'snack',   label:'Snack',     emoji:'🍪', color:'#B08D57' },
+  { key:'grocery', label:'Groceries', emoji:'🛒', color:'#2F6B4F' },
+  { key:'vending', label:'Vending',   emoji:'🥤', color:'#3B6E8A' },
+  { key:'other',   label:'Other',     emoji:'🧾', color:'#6B6153' }
+];
+
+const DEFAULTS = {
+  totalBudget:500,
+  termLabel:'This term',
+  quickAmounts:[5,8,12,15]
+};
+
+const TUTORIAL_SLIDES = [
+  {
+    emoji:'🌱',
+    title:'Earned so far',
+    body:"Your funds don't arrive all at once — they accrue a little each day of your term. This is how much has “unlocked” so far."
+  },
+  {
+    emoji:'🎯',
+    title:'Available to spend',
+    body:"Earned so far, minus what you've logged as spent. Stay under this number and you're on pace to make it to the end of your term."
+  },
+  {
+    emoji:'💳',
+    title:'Balance',
+    body:"Your actual account balance. It only changes when you log a purchase, or update it here to match the real account."
+  }
+];
+
+let config = null;
+
+function todayISO(){
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - off * 60000);
+  return local.toISOString().slice(0,10);
+}
+
+function isoPlusDays(iso, n){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+
+function defaultTermDates(){
+  const start = todayISO();
+  return { start, end: isoPlusDays(start, 111) };
+}
+
+function guessTermLabel(iso){
+  const m = Number(iso.split('-')[1]);
+  const y = iso.split('-')[0];
+  let season;
+  if(m >= 8 && m <= 12){ season = 'Fall'; }
+  else if(m >= 1 && m <= 5){ season = 'Spring'; }
+  else{ season = 'Summer'; }
+  return `${season} ${y}`;
+}
+
+function fmtDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+
+function fmtMoney(n){
+  if(typeof n !== 'number' || !isFinite(n)){ n = 0; }
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
+function slugify(str){
+  return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'fund';
+}
+
+function schoolDays(cfg){
+  const days = [];
+  const [sy,sm,sd] = cfg.termStart.split('-').map(Number);
+  const [ey,em,ed] = cfg.termEnd.split('-').map(Number);
+  let cur = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  const holidaySet = new Set(cfg.holidays);
+  while(cur <= end){
+    const dow = cur.getDay();
+    const iso = cur.getFullYear() + '-' + String(cur.getMonth()+1).padStart(2,'0') + '-' + String(cur.getDate()).padStart(2,'0');
+    if(dow !== 0 && dow !== 6 && !holidaySet.has(iso)){
+      days.push(iso);
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
+/* ---------- Funds (multiple budgets) ---------- */
+function makeBudgetId(){
+  return 'b-' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+function makeEntryId(){
+  return 'h-' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+function makeBudget(overrides){
+  return Object.assign({
+    id: makeBudgetId(),
+    name: 'Dining Dollars',
+    type: 'dining',
+    totalBudget: DEFAULTS.totalBudget,
+    targetReserve: 0,
+    balance: null,
+    quickAmounts:[...DEFAULTS.quickAmounts],
+    history:[]
+  }, overrides || {});
+}
+
+function cloneDefaults(){
+  const budget = makeBudget({ id:'fund-1', name:'Campus Fund', type:'dining' });
+  const term = defaultTermDates();
+  return {
+    termLabel: guessTermLabel(term.start),
+    termStart: term.start,
+    termEnd: term.end,
+    holidays:[],
+    totalDaysOverride:null,
+    setupComplete:false,
+    installBannerDismissed:false,
+    tutorialSeen:false,
+    themeMode:'light',
+    activeBudgetId: budget.id,
+    budgets:[budget],
+    updatedAt:0
+  };
+}
+
+function activeBudget(){
+  return config.budgets.find(b => b.id === config.activeBudgetId) || config.budgets[0];
+}
+
+function saveConfig(opts){
+  opts = opts || {};
+  try{
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  }catch(e){
+    storageProblem = true; storageWarning();
+    return false;
+  }
+  if(!opts.skipPush){ pushToCloud(); }
+  return true;
+}
+
+/* Bring an older config shape (v4: single fixed Auburn semester, no
+   fund type / reserve / entry ids) up to the current shape. Runs on
+   anything loaded from localStorage AND on anything pulled down from
+   Firestore, since another device might still be on older app code. */
+function upgradeConfigShape(raw){
+  if(!raw || typeof raw !== 'object') return raw;
+  if(raw.termStart === undefined && typeof raw.semesterStart === 'string'){ raw.termStart = raw.semesterStart; }
+  if(raw.termEnd === undefined && typeof raw.semesterEnd === 'string'){ raw.termEnd = raw.semesterEnd; }
+  if(Array.isArray(raw.budgets)){
+    raw.budgets.forEach(b => {
+      if(b && !b.type){ b.type = 'dining'; }
+      if(b && typeof b.targetReserve !== 'number'){ b.targetReserve = 0; }
+    });
+  }
+  delete raw.semesterStart;
+  delete raw.semesterEnd;
+  delete raw.proBannerDismissed;
+  return raw;
+}
+
+function migrateFromV4(){
+  try{
+    const raw = localStorage.getItem(LEGACY_CONFIG_KEY_V4);
+    if(!raw) return null;
+    const legacy = JSON.parse(raw);
+    /* Existing users already know the app — don't interrupt them with the tutorial. */
+    legacy.tutorialSeen = true;
+    return legacy;
+  }catch(e){
+    console.error('v4 migration failed:', e);
+    return null;
+  }
+}
+
+/* One-time upgrade from the original single-budget release
+   (config_v3 + history_v3), so existing balances/history survive. */
+function migrateLegacyV3(){
+  try{
+    const legacyConfigRaw = localStorage.getItem(LEGACY_CONFIG_KEY_V3);
+    if(!legacyConfigRaw) return null;
+    const legacy = JSON.parse(legacyConfigRaw);
+
+    let legacyHistory = [];
+    try{
+      const legacyHistoryRaw = localStorage.getItem(LEGACY_HISTORY_KEY_V3);
+      legacyHistory = legacyHistoryRaw ? JSON.parse(legacyHistoryRaw) : [];
+    }catch(e){ legacyHistory = []; }
+    if(!Array.isArray(legacyHistory)){ legacyHistory = []; }
+
+    const budget = makeBudget({
+      id:'fund-1',
+      name:'Dining Dollars',
+      type:'dining',
+      totalBudget: (typeof legacy.totalBudget === 'number' && legacy.totalBudget > 0) ? legacy.totalBudget : DEFAULTS.totalBudget,
+      balance: legacy.balance,
+      quickAmounts: (Array.isArray(legacy.quickAmounts) && legacy.quickAmounts.length) ? legacy.quickAmounts : [...DEFAULTS.quickAmounts],
+      history: legacyHistory
+    });
+
+    return {
+      setupComplete: !!legacy.setupComplete,
+      installBannerDismissed: !!legacy.installBannerDismissed,
+      tutorialSeen: true,
+      activeBudgetId: budget.id,
+      budgets:[budget]
+    };
+  }catch(e){
+    console.error('Legacy migration failed:', e);
+    return null;
+  }
+}
+
+function normalizeConfig(){
+  if(typeof config.termLabel !== 'string' || !config.termLabel.trim()){ config.termLabel = DEFAULTS.termLabel; }
+  const validRange = typeof config.termStart === 'string' && typeof config.termEnd === 'string' && config.termStart <= config.termEnd;
+  if(!validRange){
+    const def = defaultTermDates();
+    config.termStart = def.start;
+    config.termEnd = def.end;
+  }
+  if(!Array.isArray(config.holidays)){ config.holidays = []; }
+  if(config.totalDaysOverride !== null && (typeof config.totalDaysOverride !== 'number' || !isFinite(config.totalDaysOverride) || config.totalDaysOverride <= 0)){
+    config.totalDaysOverride = null;
+  }
+
+  if(typeof config.setupComplete !== 'boolean'){ config.setupComplete = false; }
+  if(typeof config.installBannerDismissed !== 'boolean'){ config.installBannerDismissed = false; }
+  if(typeof config.tutorialSeen !== 'boolean'){ config.tutorialSeen = false; }
+  if(!['system','light','dark'].includes(config.themeMode)){ config.themeMode = 'system'; }
+  if(typeof config.updatedAt !== 'number' || !isFinite(config.updatedAt)){ config.updatedAt = 0; }
+
+  if(!Array.isArray(config.budgets) || !config.budgets.length){
+    config.budgets = [makeBudget({ id:'fund-1', name:'Campus Fund', type:'dining' })];
+  }
+  config.budgets.forEach(b => {
+    if(!b.id){ b.id = makeBudgetId(); }
+    if(typeof b.name !== 'string' || !b.name.trim()){ b.name = 'Campus Fund'; }
+    if(!FUND_TYPES.find(t => t.key === b.type)){ b.type = 'custom'; }
+    if(typeof b.totalBudget !== 'number' || !isFinite(b.totalBudget) || b.totalBudget <= 0){ b.totalBudget = DEFAULTS.totalBudget; }
+    if(typeof b.targetReserve !== 'number' || !isFinite(b.targetReserve) || b.targetReserve < 0){ b.targetReserve = 0; }
+    if(b.balance === undefined){ b.balance = null; }
+    if(b.balance !== null && (typeof b.balance !== 'number' || !isFinite(b.balance))){ b.balance = 0; }
+    if(!Array.isArray(b.quickAmounts) || !b.quickAmounts.length){ b.quickAmounts = [...DEFAULTS.quickAmounts]; }
+    if(!Array.isArray(b.history)){ b.history = []; }
+    b.history.forEach(h => { if(h && !h.id){ h.id = makeEntryId(); } });
+  });
+  if(!config.budgets.find(b => b.id === config.activeBudgetId)){
+    config.activeBudgetId = config.budgets[0].id;
+  }
+}
+
+function migrateLunchBudget(){
+  try{
+    const old = JSON.parse(localStorage.getItem('better-lunch-budget-v2'));
+    if(!old || !Number.isFinite(old.total) || !Number.isFinite(old.starting) || !Array.isArray(old.purchases)) return null;
+    if(!/^20\d\d-\d\d-\d\d$/.test(old.start) || !/^20\d\d-\d\d-\d\d$/.test(old.end) || old.start > old.end) return null;
+    let balance = old.starting / 100;
+    const history = [{id:makeEntryId(),type:'setup',date:old.start,amount:Math.max(0,old.total-old.starting)/100,balanceAfter:balance,note:'Starting balance entered',category:'other'}];
+    for(const p of old.purchases){
+      if(!Number.isFinite(p.amount) || p.amount <= 0) continue;
+      balance = Math.round((balance-p.amount/100)*100)/100;
+      history.push({id:makeEntryId(),type:'spend',date:p.date,amount:p.amount/100,balanceAfter:balance,category:({meal:'meal',coffee:'coffee',snack:'snack',groceries:'grocery'})[String(p.category).toLowerCase()] || 'other',note:String(p.note || '')});
+    }
+    const migrated = Object.assign(cloneDefaults(), {termStart:old.start,termEnd:old.end,termLabel:guessTermLabel(old.start),holidays:old.holidays || [],totalDaysOverride:old.dayOverride || null,setupComplete:true,tutorialSeen:true,budgets:[makeBudget({id:'fund-1',name:'Dining Dollars',type:'dining',totalBudget:old.total/100,targetReserve:(old.reserve||0)/100,balance,history})]});
+    try{localStorage.setItem(CONFIG_KEY, JSON.stringify(migrated));}catch{storageProblem=true;}
+    return migrated;
+  }catch{return null;}
+}
+
+function loadState(){
+  let raw = null;
+  try{ raw = localStorage.getItem(CONFIG_KEY); }catch(e){ raw = null; storageProblem = true; }
+
+  if(raw){
+    try{ config = JSON.parse(raw); if(!config || typeof config !== 'object' || Array.isArray(config)){config=null;storageProblem=true;} }
+    catch(e){ storageProblem = true; config = null; }
+  }
+
+  if(!config){
+    config = migrateLunchBudget() || migrateFromV4() || migrateLegacyV3() || cloneDefaults();
+  }
+
+  config = upgradeConfigShape(config);
+  normalizeConfig();
+}
+
+/* Recompute every balanceAfter (and the fund's live balance) by
+   replaying history in order. 'setup' and 'update' entries are
+   trusted anchors (their balanceAfter is the actual value entered);
+   'spend' entries subtract from whatever the running balance is.
+   Called after editing or deleting a logged purchase, since that can
+   shift every balance recorded after it. */
+function recomputeBalances(budget){
+  let bal = 0;
+  budget.history.forEach(h => {
+    if(h.type === 'spend'){
+      bal = Math.round((bal - (Number(h.amount) || 0)) * 100) / 100;
+    }else{
+      bal = Math.round((Number(h.balanceAfter) || 0) * 100) / 100;
+    }
+    h.balanceAfter = bal;
+  });
+  budget.balance = bal;
+}
+
+/* ---------- Cross-device sync (Firebase Auth + Firestore) ----------
+   sync.js (an ES module, loaded separately) owns the actual Firebase
+   calls and talks back to this classic script via window events, since
+   module scripts are deferred and may finish loading after this script
+   has already run. */
+let syncReconciled = false;
+let lastPushedAt = 0;
+
+function pushToCloud(){
+  if(!window.DDSync || !window.DDSync.isConfigured || !window.DDSync.currentUser()) return;
+  const stamp = Date.now();
+  config.updatedAt = stamp;
+  lastPushedAt = stamp;
+  window.DDSync.pushConfig(config).catch(err => console.error('Cloud sync failed:', err));
+}
+
+function adoptRemoteConfig(remote){
+  config = Object.assign(cloneDefaults(), upgradeConfigShape(remote));
+  normalizeConfig();
+  saveConfig({ skipPush:true });
+  applyTheme();
+  render();
+  showToast('Synced from your account');
+}
+
+function friendlySyncError(e){
+  const messages = {
+    'auth/invalid-email':'That email address looks invalid.',
+    'auth/user-not-found':'No account found with that email.',
+    'auth/wrong-password':'Incorrect password.',
+    'auth/invalid-credential':'Incorrect email or password.',
+    'auth/email-already-in-use':'An account with that email already exists — try signing in instead.',
+    'auth/weak-password':'Password should be at least 6 characters.',
+    'auth/network-request-failed':'Network error — check your connection and try again.',
+    'auth/too-many-requests':'Too many attempts — wait a bit and try again.',
+    'not-configured':"Sync isn't set up for this build yet."
+  };
+  const code = e && e.code;
+  return (code && messages[code]) || (e && e.message) || 'Something went wrong. Please try again.';
+}
+
+function accountSectionHtml(introText){
+  if(!window.DDSync || !window.DDSync.isConfigured){
+    return `<div class="note">Saved on this device. Use Backup and Restore to move your funds and history.</div>`;
+  }
+  const user = window.DDSync.currentUser();
+  if(user){
+    return `
+      <div class="row-flat" style="margin-bottom:6px;">
+        <div class="row-flat-left">
+          <div class="row-flat-icon">☁️</div>
+          <div>
+            <div class="row-flat-label">Synced</div>
+            <div class="row-flat-sub">${escapeHtml(user.email || '')}</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-wide" id="btn-sign-out" style="margin-bottom:4px;">Sign out</button>
+    `;
+  }
+  return `
+    <p class="hint" style="margin-top:0;">${introText || 'Sign in to keep your funds and history in sync across every device.'}</p>
+    <label>Email</label>
+    <input type="email" id="auth-email" autocapitalize="off" autocomplete="email" placeholder="you@school.edu">
+    <label>Password</label>
+    <input type="password" id="auth-password" placeholder="At least 6 characters" autocomplete="current-password">
+    <div class="sheet-actions" style="margin-top:14px;">
+      <button class="btn btn-secondary" id="btn-sign-up">Create account</button>
+      <button class="btn btn-primary" id="btn-sign-in">Sign in</button>
+    </div>
+    <button class="link" id="btn-forgot-password" style="color:var(--muted);">Forgot password?</button>
+  `;
+}
+
+function wireAccountSection(container){
+  if(!container) return;
+
+  const emailInput = () => container.querySelector('#auth-email');
+  const passwordInput = () => container.querySelector('#auth-password');
+
+  const signInBtn = container.querySelector('#btn-sign-in');
+  const signUpBtn = container.querySelector('#btn-sign-up');
+  const forgotBtn = container.querySelector('#btn-forgot-password');
+  const signOutBtn = container.querySelector('#btn-sign-out');
+
+  if(signInBtn){
+    signInBtn.onclick = async () => {
+      const email = emailInput().value.trim();
+      const password = passwordInput().value;
+      if(!email || !password){ await showAlert('Enter your email and password.'); return; }
+      if(!window.DDSync){ await showAlert('Still loading — try again in a second.'); return; }
+      try{
+        await window.DDSync.signIn(email, password);
+        showToast('Signed in');
+      }catch(e){
+        await showAlert(friendlySyncError(e));
+      }
+    };
+  }
+  if(signUpBtn){
+    signUpBtn.onclick = async () => {
+      const email = emailInput().value.trim();
+      const password = passwordInput().value;
+      if(!email || !password){ await showAlert('Enter an email and password to create an account.'); return; }
+      if(!window.DDSync){ await showAlert('Still loading — try again in a second.'); return; }
+      try{
+        await window.DDSync.signUp(email, password);
+        showToast('Account created');
+      }catch(e){
+        await showAlert(friendlySyncError(e));
+      }
+    };
+  }
+  if(forgotBtn){
+    forgotBtn.onclick = async () => {
+      const email = emailInput().value.trim();
+      if(!email){ await showAlert('Enter your email above, then tap "Forgot password?" again.'); return; }
+      if(!window.DDSync){ await showAlert('Still loading — try again in a second.'); return; }
+      const originalLabel = forgotBtn.textContent;
+      forgotBtn.disabled = true;
+      forgotBtn.textContent = 'Sending…';
+      try{
+        await window.DDSync.resetPassword(email);
+        /* Firebase never reveals whether an email actually has an account
+           (that's deliberate anti-enumeration behavior) — this call
+           "succeeds" either way, so the message can't promise an email
+           landed, only that one will if the account exists. */
+        await showAlert("If an account exists for that email, we've sent a password reset link — check your inbox (and spam folder). It can take a few minutes.");
+      }catch(e){
+        await showAlert(friendlySyncError(e));
+      }finally{
+        forgotBtn.disabled = false;
+        forgotBtn.textContent = originalLabel;
+      }
+    };
+  }
+  if(signOutBtn){
+    signOutBtn.onclick = async () => {
+      const ok = await showConfirm(
+        'Your data stays on this device, but will stop syncing until you sign in again.',
+        { title:'Sign out?', okLabel:'Sign out' }
+      );
+      if(!ok || !window.DDSync) return;
+      await window.DDSync.signOut();
+      showToast('Signed out');
+    };
+  }
+}
+
+window.addEventListener('dd-auth-changed', (e) => {
+  /* Each sign-in needs its own fresh reconciliation against whatever is in
+     the cloud right now — without this reset, signing out and back in (or
+     switching accounts) would skip straight to treating the first update
+     as a "live edit from another device" and silently overwrite local data. */
+  if(!e.detail.user){ syncReconciled = false; }
+
+  const acctEl = document.getElementById('account-section');
+  if(acctEl){
+    acctEl.innerHTML = accountSectionHtml();
+    wireAccountSection(acctEl);
+  }
+});
+
+window.addEventListener('dd-remote-update', (e) => {
+  const remote = e.detail.data;
+
+  if(!remote){
+    if(config && config.setupComplete && window.DDSync && window.DDSync.currentUser()){
+      pushToCloud();
+    }
+    syncReconciled = true;
+    return;
+  }
+
+  if(remote.updatedAt && remote.updatedAt === lastPushedAt){
+    /* This snapshot is just our own write echoing back — nothing to do. */
+    syncReconciled = true;
+    return;
+  }
+
+  if(!syncReconciled){
+    syncReconciled = true;
+    if(!config.setupComplete){
+      adoptRemoteConfig(remote);
+      return;
+    }
+    const remoteTime = remote.updatedAt || 0;
+    const localTime = config.updatedAt || 0;
+    if(remoteTime > localTime){
+      showConfirm(
+        "Cloud data from your account is newer than what's on this device. Load it and replace what's here?",
+        { title:'Newer data found', okLabel:'Use cloud data' }
+      ).then(ok => { if(ok){ adoptRemoteConfig(remote); }else{ pushToCloud(); } });
+    }else{
+      pushToCloud();
+    }
+    return;
+  }
+
+  /* A live edit from another device, after this session's initial
+     reconciliation — apply it immediately, that's the whole point of sync. */
+  adoptRemoteConfig(remote);
+});
+
+function computeStats(budget){
+  budget = budget || activeBudget();
+  const today = todayISO();
+
+  /* Weekdays-minus-skip-days is a good default, but some terms have a
+     known, authoritative day count that doesn't cleanly reduce to "every
+     weekday except these specific dates" (e.g. a school's own published
+     class-day count may exclude extra days a generic weekday count can't
+     infer). totalDaysOverride lets that real number win when set — the
+     first N school days in the range become "the term," everything
+     computed past that point is just outside it. */
+  const allDays = schoolDays(config);
+  const hasOverride = typeof config.totalDaysOverride === 'number' && config.totalDaysOverride > 0;
+  const totalDays = hasOverride ? Math.min(config.totalDaysOverride, allDays.length) : allDays.length;
+  const days = hasOverride ? allDays.slice(0, totalDays) : allDays;
+
+  const earnedDays = days.filter(d => d <= today);
+  const elapsedDays = earnedDays.length;
+
+  const dayIndex = days.indexOf(today);
+  const dayOfTerm = dayIndex >= 0 ? dayIndex + 1 : null;
+
+  const remainingCount = Math.max(0, totalDays - elapsedDays);
+
+  const totalBudget = Number(budget.totalBudget) || 0;
+  const targetReserve = Number(budget.targetReserve) || 0;
+  const spendableTotal = Math.max(0, totalBudget - targetReserve);
+  const dailyRate = totalDays > 0 ? spendableTotal / totalDays : 0;
+
+  const accumulatedAllowance = dailyRate * elapsedDays;
+
+  const totalSpent = budget.history.reduce((total, entry) => {
+    const countsAsSpend = entry && (entry.type === 'spend' || entry.type === 'setup');
+    if(countsAsSpend && typeof entry.amount === 'number' && isFinite(entry.amount)){
+      return total + entry.amount;
+    }
+    return total;
+  }, 0);
+
+  const availableToSpend = accumulatedAllowance - totalSpent;
+  const balance = Number(budget.balance) || 0;
+
+  const avgPerDay = elapsedDays > 0 ? totalSpent / elapsedDays : 0;
+  const projectedEndBalance = totalBudget - (avgPerDay * totalDays);
+
+  return {
+    budget, days, today, totalDays, earnedDays, elapsedDays, remainingCount,
+    dayOfTerm, dailyRate, accumulatedAllowance, totalSpent, availableToSpend,
+    balance, totalBudget, targetReserve, spendableTotal, avgPerDay, projectedEndBalance,
+    isTermDayToday: dayIndex >= 0
+  };
+}
+
+function computeTodayTarget(s){
+  if(s.availableToSpend <= 0) return null;
+  const divisor = Math.max(1, s.remainingCount + (s.isTermDayToday ? 1 : 0));
+  return s.availableToSpend / divisor;
+}
+
+function mondayOf(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = (dt.getDay() + 6) % 7;
+  dt.setDate(dt.getDate() - dow);
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+
+function computeInsights(budget){
+  budget = budget || activeBudget();
+  const s = computeStats(budget);
+
+  const weekTotals = {};
+  budget.history.forEach(h => {
+    if(!h || h.type !== 'spend' || typeof h.amount !== 'number') return;
+    const key = mondayOf(h.date);
+    weekTotals[key] = (weekTotals[key] || 0) + h.amount;
+  });
+  const weekKeys = Object.keys(weekTotals).sort().slice(-6);
+  const maxWeek = Math.max(1, ...weekKeys.map(k => weekTotals[k]));
+
+  const catTotals = {};
+  budget.history.forEach(h => {
+    if(!h || typeof h.amount !== 'number') return;
+    if(h.type !== 'spend' && h.type !== 'setup') return;
+    const key = h.category || 'other';
+    catTotals[key] = (catTotals[key] || 0) + h.amount;
+  });
+  const catEntries = Object.entries(catTotals).sort((a,b) => b[1] - a[1]);
+  const maxCat = Math.max(1, ...catEntries.map(e => e[1]));
+
+  let projection;
+  if(s.elapsedDays === 0){
+    projection = { status:'none' };
+  }else if(s.avgPerDay <= s.dailyRate + 0.005){
+    projection = { status:'good', projectedLeftover: s.projectedEndBalance };
+  }else{
+    const daysUntilExhausted = s.avgPerDay > 0 ? s.balance / s.avgPerDay : Infinity;
+    const futureDays = s.days.filter(d => d > s.today);
+    const idx = Math.min(futureDays.length - 1, Math.max(0, Math.floor(daysUntilExhausted) - 1));
+    const runOutDate = (isFinite(daysUntilExhausted) && futureDays.length) ? futureDays[idx] : null;
+    projection = { status:'warn', runOutDate, avgPerDay: s.avgPerDay };
+  }
+
+  return { s, weekKeys, weekTotals, maxWeek, catEntries, maxCat, projection };
+}
+
+/* ---------- Export / share / backup ---------- */
+function csvEscape(v){
+  const str = String(v).replace(/^[=+@\-\t\r\n]/, "'$&");
+  return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+}
+
+function toCSV(budget){
+  budget = budget || activeBudget();
+  const header = ['date','type','category','amount','balance_after','note'];
+  const rows = budget.history.map(h => [
+    h.date || '',
+    h.type || '',
+    h.category || '',
+    (typeof h.amount === 'number' ? h.amount.toFixed(2) : ''),
+    (typeof h.balanceAfter === 'number' ? h.balanceAfter.toFixed(2) : ''),
+    h.note || ''
+  ]);
+  return [header, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+}
+
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportCSV(){
+  const budget = activeBudget();
+  downloadBlob(toCSV(budget), `stipend-${slugify(budget.name)}-history.csv`, 'text/csv');
+  showToast('History exported as CSV');
+}
+
+function exportBackup(){
+  const payload = JSON.stringify({ version:3, exportedAt: todayISO(), config }, null, 2);
+  downloadBlob(payload, 'stipend-backup.json', 'application/json');
+  showToast('Backup file downloaded');
+}
+
+async function shareSummary(){
+  const budget = activeBudget();
+  const s = computeStats(budget);
+  const text = `${budget.name} — ${fmtDate(s.today)}\n` +
+    `Balance: ${fmtMoney(s.balance)}\n` +
+    `Available to spend: ${fmtMoney(s.availableToSpend)}\n` +
+    `Days completed: ${s.elapsedDays}/${s.totalDays}`;
+
+  if(navigator.share){
+    try{ await navigator.share({ title: `${budget.name} summary`, text }); }
+    catch(e){ /* user cancelled the share sheet — nothing to do */ }
+  }else if(navigator.clipboard && navigator.clipboard.writeText){
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast('Summary copied to clipboard');
+    }catch(e){
+      await showAlert(text);
+    }
+  }else{
+    await showAlert(text);
+  }
+}
+
+function importBackupFile(file){
+  const reader = new FileReader();
+  reader.onload = async () => {
+    let data;
+    try{
+      data = JSON.parse(reader.result);
+      if(!data || typeof data !== 'object' || !data.config || typeof data.config !== 'object'){
+        throw new Error('Unrecognized backup format');
+      }
+    }catch(e){
+      await showAlert("That file doesn't look like a valid Stipend backup.");
+      return;
+    }
+
+    const ok = await showConfirm(
+      'This will replace your current funds, settings, and history with the contents of this backup file.',
+      { title:'Restore backup?', okLabel:'Restore' }
+    );
+    if(!ok) return;
+
+    let restored;
+    if(Array.isArray(data.config.budgets) && data.config.budgets.length){
+      restored = upgradeConfigShape(data.config);
+    }else{
+      /* Very old single-budget backup format. */
+      const legacyHistory = Array.isArray(data.history) ? data.history : [];
+      const budget = makeBudget({
+        id:'fund-1',
+        name:'Campus Fund',
+        type:'dining',
+        totalBudget: (typeof data.config.totalBudget === 'number' && data.config.totalBudget > 0) ? data.config.totalBudget : DEFAULTS.totalBudget,
+        balance: data.config.balance,
+        quickAmounts: (Array.isArray(data.config.quickAmounts) && data.config.quickAmounts.length) ? data.config.quickAmounts : [...DEFAULTS.quickAmounts],
+        history: legacyHistory
+      });
+      restored = {
+        setupComplete: !!data.config.setupComplete,
+        installBannerDismissed: !!data.config.installBannerDismissed,
+        tutorialSeen: true,
+        activeBudgetId: budget.id,
+        budgets:[budget]
+      };
+    }
+
+    config = restored;
+    normalizeConfig();
+    saveConfig();
+    applyTheme();
+
+    document.querySelectorAll('.overlay').forEach(o => o.remove());
+    showToast('Backup restored');
+    render();
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- Shareable fund-card image ---------- */
+function roundRectPath(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function fitFontSize(ctx, text, weight, font, maxWidth, startSize, minSize){
+  let size = startSize;
+  while(size > minSize){
+    ctx.font = `${weight} ${size}px ${font}`;
+    if(ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
+  return size;
+}
+
+function drawBudgetCard(budget, s){
+  const W = 1080, H = 1080;
+  const FONT = 'Georgia, "Iowan Old Style", "Palatino Linotype", serif';
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#173A2E');
+  bg.addColorStop(0.55, '#1F4739');
+  bg.addColorStop(1, '#2E5C4A');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const glow = ctx.createRadialGradient(W - 40, 40, 20, W - 40, 40, 460);
+  glow.addColorStop(0, 'rgba(201,160,107,.45)');
+  glow.addColorStop(1, 'rgba(201,160,107,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = 'rgba(255,255,255,.7)';
+  ctx.font = `700 30px ${FONT}`;
+  ctx.fillText(String(config.termLabel || '').toUpperCase(), 70, 120);
+
+  const nameSize = fitFontSize(ctx, budget.name, 800, FONT, W - 140, 56, 30);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `800 ${nameSize}px ${FONT}`;
+  ctx.fillText(budget.name, 70, 195);
+
+  ctx.fillStyle = 'rgba(255,255,255,.68)';
+  ctx.font = `700 26px ${FONT}`;
+  ctx.fillText('AVAILABLE TO SPEND', 70, 360);
+
+  const amountText = (s.availableToSpend < 0 ? '−' : '') + fmtMoney(Math.abs(s.availableToSpend));
+  const amtSize = fitFontSize(ctx, amountText, 800, FONT, W - 132, 128, 64);
+  ctx.fillStyle = s.availableToSpend < 0 ? '#FF8A70' : '#E4B879';
+  ctx.font = `800 ${amtSize}px ${FONT}`;
+  ctx.fillText(amountText, 66, 490);
+
+  const chips = [
+    { label:'BALANCE', value: fmtMoney(s.balance) },
+    { label:'SPENT', value: fmtMoney(s.totalSpent) },
+    { label:'DAYS LEFT', value: String(s.remainingCount) }
+  ];
+  const chipGap = 24;
+  const chipW = (W - 140 - chipGap * 2) / 3;
+  const chipY = 560;
+  const chipH = 150;
+  chips.forEach((c, i) => {
+    const x = 70 + i * (chipW + chipGap);
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    roundRectPath(ctx, x, chipY, chipW, chipH, 20);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.font = `700 20px ${FONT}`;
+    ctx.fillText(c.label, x + 24, chipY + 46);
+
+    const valSize = fitFontSize(ctx, c.value, 800, FONT, chipW - 48, 40, 22);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `800 ${valSize}px ${FONT}`;
+    ctx.fillText(c.value, x + 24, chipY + 100);
+  });
+
+  const barX = 70, barY = 790, barW = W - 140, barH = 18;
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  roundRectPath(ctx, barX, barY, barW, barH, 9);
+  ctx.fill();
+
+  const pct = s.totalDays > 0 ? Math.max(0, Math.min(1, s.elapsedDays / s.totalDays)) : 0;
+  const fillGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  fillGrad.addColorStop(0, '#C9A06B');
+  fillGrad.addColorStop(1, '#E4B879');
+  ctx.fillStyle = fillGrad;
+  roundRectPath(ctx, barX, barY, Math.max(barH, barW * pct), barH, 9);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.font = `600 24px ${FONT}`;
+  ctx.fillText(`${s.elapsedDays} of ${s.totalDays} days completed`, barX, barY + 56);
+
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.font = `500 22px ${FONT}`;
+  ctx.fillText(`Tracked with ${APP_NAME} · ${fmtDate(s.today)}`, 70, H - 60);
+
+  return canvas;
+}
+
+async function shareBudgetCardImage(budget, s){
+  budget = budget || activeBudget();
+  s = s || computeStats(budget);
+  const canvas = drawBudgetCard(budget, s);
+
+  canvas.toBlob(async (blob) => {
+    if(!blob){ showToast("Couldn't generate the image"); return; }
+    const filename = `stipend-${slugify(budget.name)}.png`;
+    const file = new File([blob], filename, { type:'image/png' });
+
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      try{ await navigator.share({ files:[file], title: `${budget.name} — ${APP_NAME}` }); }
+      catch(e){ /* user cancelled the share sheet */ }
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    showToast('Image saved');
+  }, 'image/png', 0.95);
+}
+
+/* ---------- Home-screen install detection (Safari on iOS) ---------- */
+function isStandalone(){
+  return window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+}
+function isIOS(){
+  return /iP(hone|od|ad)/.test(navigator.platform || '') ||
+    (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+}
+function isSafariBrowser(){
+  const ua = navigator.userAgent || '';
+  return /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(ua);
+}
+function shouldShowInstallBanner(){
+  return isIOS() && isSafariBrowser() && !isStandalone() && !config.installBannerDismissed;
+}
+
+/* ---------- Manual theme override (in addition to system preference) ---------- */
+function applyTheme(){
+  if(config.themeMode === 'light'){ document.documentElement.setAttribute('data-theme','light'); }
+  else if(config.themeMode === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+  else{ document.documentElement.removeAttribute('data-theme'); }
+}
+
+/* ---------- Lightweight in-app dialogs (replace native alert/confirm) ---------- */
+function showAlert(message){
+  return new Promise(resolve => {
+    const ov = overlay(`
+      <h2>Heads up</h2>
+      <p class="hint">${escapeHtml(message)}</p>
+      <div class="sheet-actions">
+        <button class="btn btn-primary" id="alert-ok" style="flex:1;">OK</button>
+      </div>
+    `);
+    document.getElementById('alert-ok').onclick = () => { ov.remove(); resolve(); };
+  });
+}
+
+function showConfirm(message, opts){
+  opts = opts || {};
+  return new Promise(resolve => {
+    const ov = overlay(`
+      <h2>${escapeHtml(opts.title || 'Please confirm')}</h2>
+      <p class="hint">${escapeHtml(message)}</p>
+      <div class="sheet-actions">
+        <button class="btn btn-secondary" id="cf-cancel">Cancel</button>
+        <button class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" id="cf-ok">${escapeHtml(opts.okLabel || 'Confirm')}</button>
+      </div>
+    `);
+    const finish = (val) => { ov.remove(); resolve(val); };
+    document.getElementById('cf-cancel').onclick = () => finish(false);
+    document.getElementById('cf-ok').onclick = () => finish(true);
+    ov.addEventListener('click', e => { if(e.target === ov){ finish(false); } });
+  });
+}
+
+function showToast(message){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = message;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 300);
+  }, 2200);
+}
+
+/* ---------- Swipeable "how this works" tutorial ---------- */
+function showTutorial(){
+  let index = 0;
+
+  const slidesHtml = TUTORIAL_SLIDES.map(sl => `
+    <div class="tut-slide">
+      <div class="tut-emoji">${sl.emoji}</div>
+      <h2>${escapeHtml(sl.title)}</h2>
+      <p class="hint" style="margin-bottom:0;">${escapeHtml(sl.body)}</p>
+    </div>
+  `).join('');
+
+  const ov = overlay(`
+    <button class="close-x" id="close-tutorial">×</button>
+    <div class="tut-track" id="tut-track">${slidesHtml}</div>
+    <div class="tut-dots" id="tut-dots">${TUTORIAL_SLIDES.map((_, i) => `<span class="tut-dot${i === 0 ? ' active' : ''}"></span>`).join('')}</div>
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="tut-back" style="visibility:hidden;">Back</button>
+      <button class="btn btn-primary" id="tut-next">Next</button>
+    </div>
+  `);
+
+  const track = document.getElementById('tut-track');
+  const backBtn = document.getElementById('tut-back');
+  const nextBtn = document.getElementById('tut-next');
+  const dots = () => Array.from(ov.querySelectorAll('.tut-dot'));
+
+  function syncControls(){
+    dots().forEach((d, di) => d.classList.toggle('active', di === index));
+    backBtn.style.visibility = index === 0 ? 'hidden' : 'visible';
+    nextBtn.textContent = index === TUTORIAL_SLIDES.length - 1 ? 'Got it' : 'Next';
+  }
+
+  function finish(){
+    config.tutorialSeen = true;
+    saveConfig();
+    ov.remove();
+  }
+
+  function goTo(i){
+    index = Math.max(0, Math.min(TUTORIAL_SLIDES.length - 1, i));
+    track.scrollTo({ left: index * track.clientWidth, behavior:'smooth' });
+    syncControls();
+  }
+
+  let scrollTimer;
+  track.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      index = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      syncControls();
+    }, 80);
+  });
+
+  backBtn.onclick = () => goTo(index - 1);
+  nextBtn.onclick = () => {
+    if(index === TUTORIAL_SLIDES.length - 1){ finish(); }
+    else{ goTo(index + 1); }
+  };
+  document.getElementById('close-tutorial').onclick = finish;
+}
+
+function render(){
+  applyTheme();
+  storageWarning();
+  const app = document.getElementById('app');
+  if(!config.setupComplete){
+    app.innerHTML = onboardingView();
+    wireOnboarding();
+    wireBanners();
+    return;
+  }
+  app.innerHTML = mainView();
+  wireMain();
+  wireBanners();
+}
+
+function bannersHtml(){
+  if(!shouldShowInstallBanner()) return '';
+  return `
+    <div class="banner" id="install-banner">
+      <span>📲 Add this to your Home Screen: tap <b>Share</b>, then <b>“Add to Home Screen”</b> for the full-screen app.</span>
+      <button class="banner-x" id="dismiss-install" aria-label="Dismiss">×</button>
+    </div>`;
+}
+
+function wireBanners(){
+  const installBtn = document.getElementById('dismiss-install');
+  if(installBtn){
+    installBtn.onclick = () => {
+      config.installBannerDismissed = true;
+      saveConfig();
+      const el = document.getElementById('install-banner');
+      if(el) el.remove();
+    };
+  }
+}
+
+function onboardingView(){
+  const term = defaultTermDates();
+  const guessedLabel = guessTermLabel(term.start);
+  const typeChips = FUND_TYPES.map((t,i) => `
+    <button type="button" class="tile fund-type-tile${i===0?' active':''}" data-type="${t.key}">
+      <span class="tile-icon">${t.emoji}</span>${t.label}
+    </button>`).join('');
+
+  return `
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <div class="eyebrow">Welcome to</div>
+          <h1>${APP_NAME}</h1>
+        </div>
+      </div>
+    </div>
+    <div class="wrap">
+      ${bannersHtml()}
+
+      <p class="hint" style="margin-top:14px;">Track a campus fund — dining dollars, a meal plan, campus cash, bookstore funds, or anything else — and always know how much you can safely spend.</p>
+
+
+      <div class="section-title">Fund type</div>
+      <div class="tile-grid" id="ob-type-grid">${typeChips}</div>
+
+      <label>Fund name</label>
+      <input type="text" id="ob-name" value="${escapeHtml(FUND_TYPES[0].label)}" maxlength="30">
+      <label>Current balance</label>
+      <input type="number" id="ob-balance" inputmode="decimal" placeholder="e.g. 300.00" step="0.01" min="0">
+      <label>Total for the term</label>
+      <input type="number" id="ob-total" value="${DEFAULTS.totalBudget}" step="1" min="1">
+
+      <div class="section-title">Term</div>
+      <p class="hint" style="margin-top:0;">Your daily spending budget accrues on each school day in this range. Add breaks later in Settings.</p>
+      <label>Term label</label>
+      <input type="text" id="ob-term-label" value="${guessedLabel}" maxlength="30">
+      <div class="row2">
+        <div><label>Start date</label><input type="date" id="ob-term-start" value="${term.start}"></div>
+        <div><label>End date</label><input type="date" id="ob-term-end" value="${term.end}"></div>
+      </div>
+
+      <div class="sheet-actions" style="margin-top:20px;">
+        <button class="btn btn-primary" id="ob-start-btn" style="flex:1;">Start tracking</button>
+      </div>
+    </div>
+  `;
+}
+
+function wireOnboarding(){
+  wireAccountSection(document.getElementById('account-section'));
+
+  let selectedType = FUND_TYPES[0].key;
+  let nameTouched = false;
+  const nameInput = document.getElementById('ob-name');
+  nameInput.addEventListener('input', () => { nameTouched = true; });
+
+  document.querySelectorAll('.fund-type-tile').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.fund-type-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedType = btn.dataset.type;
+      if(!nameTouched){
+        const meta = FUND_TYPES.find(t => t.key === selectedType);
+        nameInput.value = meta.label;
+      }
+    };
+  });
+
+  document.getElementById('ob-start-btn').onclick = async () => {
+    const balance = parseFloat(document.getElementById('ob-balance').value);
+    const total = parseFloat(document.getElementById('ob-total').value);
+    const start = document.getElementById('ob-term-start').value;
+    const end = document.getElementById('ob-term-end').value;
+    const label = document.getElementById('ob-term-label').value.trim();
+    const name = nameInput.value.trim();
+
+    if(isNaN(balance) || balance < 0){
+      await showAlert('Enter your current balance to continue.');
+      return;
+    }
+    if(!start || !end || start > end){
+      await showAlert('Enter a valid term date range.');
+      return;
+    }
+
+    const totalBudget = (!isNaN(total) && total > 0) ? total : DEFAULTS.totalBudget;
+
+    /* Spending that happened before you started using the tracker
+       (e.g. you're entering this on day 6, not day 1) still counts
+       toward total_spent, or available_to_spend would be wrong. */
+    const spentBeforeSetup = Math.max(0, totalBudget - balance);
+
+    const budget = makeBudget({
+      id:'fund-1',
+      name: name || FUND_TYPES.find(t => t.key === selectedType).label,
+      type: selectedType,
+      totalBudget,
+      balance,
+      history:[{
+        id: makeEntryId(), date: todayISO(), type:'setup',
+        amount: spentBeforeSetup > 0 ? spentBeforeSetup : null,
+        category:'other', balanceAfter: balance, note:'Starting balance entered'
+      }]
+    });
+
+    config.termLabel = label || guessTermLabel(start);
+    config.termStart = start;
+    config.termEnd = end;
+    config.holidays = [];
+    config.budgets = [budget];
+    config.activeBudgetId = budget.id;
+    config.setupComplete = true;
+
+    saveConfig();
+    render();
+
+    if(!config.tutorialSeen){
+      showTutorial();
+    }
+  };
+}
+
+function historyRowMeta(h){
+  if(h.type === 'spend'){
+    const meta = CATEGORIES.find(c => c.key === (h.category || 'other')) || CATEGORIES[CATEGORIES.length - 1];
+    return { icon: meta.emoji, label: `Purchase −${fmtMoney(h.amount)} · ${meta.label}` };
+  }
+  if(h.type === 'setup'){
+    const label = (typeof h.amount === 'number' && h.amount > 0)
+      ? `Starting balance (${fmtMoney(h.amount)} already spent)`
+      : 'Starting balance';
+    return { icon:'🏁', label };
+  }
+  return { icon:'🔄', label:'Balance updated' };
+}
+
+function budgetTabsHtml(){
+  const tabs = config.budgets.map(b =>
+    `<button type="button" class="budget-tab${b.id === config.activeBudgetId ? ' active' : ''}" data-budget="${b.id}">${escapeHtml(b.name)}</button>`
+  ).join('');
+  return `
+    <div class="budget-tabs">
+      ${tabs}
+      <button type="button" class="budget-tab add" id="add-budget-tab">+ Add</button>
+    </div>`;
+}
+
+function mainView(){
+  const budget = activeBudget();
+  const s = computeStats(budget);
+  const multi = config.budgets.length > 1;
+  const target = computeTodayTarget(s);
+  const pct = s.totalDays > 0 ? Math.max(0, Math.min(1, s.elapsedDays / s.totalDays)) * 100 : 0;
+
+  const historyRows = budget.history.slice().reverse().slice(0,6).map(h => {
+    const meta = historyRowMeta(h);
+    return `
+      <div class="row-flat">
+        <div class="row-flat-left">
+          <span class="row-flat-icon">${meta.icon}</span>
+          <div class="row-flat-label">${meta.label}</div>
+        </div>
+        <div class="row-flat-right">
+          <div class="row-flat-amt">${fmtMoney(h.balanceAfter)}</div>
+          <div class="row-flat-sub">${fmtDate(h.date)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  let paceClass, paceText;
+  if(s.availableToSpend < 0){
+    paceClass = 'pace-bad';
+    paceText = `⚠ ${fmtMoney(Math.abs(s.availableToSpend))} ahead of what you've earned so far.`;
+  }else if(s.elapsedDays === 0){
+    paceClass = 'pace-neutral';
+    paceText = `Nothing earned yet — check back once the term gets underway.`;
+  }else if(s.availableToSpend > s.dailyRate * 1.5){
+    paceClass = 'pace-good';
+    paceText = `You're ${fmtMoney(s.availableToSpend)} ahead of pace. Nice work.`;
+  }else if(target !== null){
+    paceClass = 'pace-good';
+    paceText = `Keep today under ${fmtMoney(target)} to stay on pace.`;
+  }else{
+    paceClass = 'pace-neutral';
+    paceText = `Right on pace.`;
+  }
+
+  return `
+    <div class="topbar">
+      <div class="topbar-inner">
+        <div>
+          <div class="eyebrow">${escapeHtml(config.termLabel)}</div>
+          <h1>${APP_NAME}</h1>
+        </div>
+        <button class="icon-btn" id="open-tutorial" aria-label="How this works">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="11.5"/>
+            <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="wrap">
+      ${bannersHtml()}
+      ${multi ? budgetTabsHtml() : ''}
+
+      <div class="hero-metric">
+        <div class="hero-metric-label">${escapeHtml(budget.name)} · available to spend</div>
+        <div class="hero-metric-num${s.availableToSpend < 0 ? ' neg' : ''}">${s.availableToSpend < 0 ? '−' : ''}${fmtMoney(Math.abs(s.availableToSpend))}</div>
+        <div class="pace-line ${paceClass}">${paceText}</div>
+      </div>
+
+      <div class="daily-budget-line"><span>Daily spending budget</span><strong>${fmtMoney(s.dailyRate)}</strong><small>Unspent daily funds carry forward.</small></div><div class="stat-strip">
+        <div class="stat-col">
+          <div class="stat-col-n">${fmtMoney(s.balance)}</div>
+          <div class="stat-col-l">Balance</div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-col-n">${fmtMoney(Math.max(0, s.projectedEndBalance))}</div>
+          <div class="stat-col-l">Projected left</div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-col-n">${s.remainingCount}</div>
+          <div class="stat-col-l">Days left</div>
+        </div>
+      </div>
+
+      <div class="term-progress">
+        <div class="term-progress-head">
+          <span>${s.elapsedDays} of ${s.totalDays} days</span>
+          <button type="button" class="link-inline" id="open-update">Update balance</button>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+      </div>
+
+      <div class="activity-section">
+        <div class="activity-title-row">
+          <span class="activity-title">Recent activity${multi ? ` · ${escapeHtml(budget.name)}` : ''}</span>
+          ${budget.history.length ? `<button type="button" class="link-inline" id="open-history">See all</button>` : ''}
+        </div>
+        ${budget.history.length ? historyRows : '<div class="empty">Nothing logged yet</div>'}
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <button class="tabbar-btn active" id="tab-home" aria-label="Home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 11l9-8 9 8"/>
+          <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>
+        </svg>
+        Home
+      </button>
+      <button class="tabbar-btn" id="tab-log" aria-label="Log purchase">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <line x1="12" y1="8" x2="12" y2="16"/>
+          <line x1="8" y1="12" x2="16" y2="12"/>
+        </svg>
+        Log
+      </button>
+      <button class="tabbar-btn" id="tab-insights" aria-label="Insights">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="20" x2="6" y2="12"/>
+          <line x1="12" y1="20" x2="12" y2="6"/>
+          <line x1="18" y1="20" x2="18" y2="15"/>
+        </svg>
+        Insights
+      </button>
+      <button class="tabbar-btn" id="tab-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a2 2 0 0 0-1.51 1z"/>
+        </svg>
+        Settings
+      </button>
+    </div>
+  `;
+}
+
+function wireMain(){
+  document.getElementById('open-tutorial').onclick = () => showTutorial();
+  document.getElementById('open-update').onclick = () => showUpdate();
+
+  const historyBtn = document.getElementById('open-history');
+  if(historyBtn){ historyBtn.onclick = () => showHistory(); }
+
+  document.getElementById('tab-home').onclick = () => window.scrollTo({ top:0, behavior:'smooth' });
+  document.getElementById('tab-log').onclick = () => showSpend();
+  document.getElementById('tab-insights').onclick = () => showInsights();
+  document.getElementById('tab-settings').onclick = () => showSettings();
+
+  document.querySelectorAll('.budget-tab[data-budget]').forEach(btn => {
+    btn.onclick = () => {
+      if(btn.dataset.budget === config.activeBudgetId) return;
+      config.activeBudgetId = btn.dataset.budget;
+      saveConfig();
+      render();
+    };
+  });
+  const addTab = document.getElementById('add-budget-tab');
+  if(addTab){ addTab.onclick = () => showBudgetForm(null); }
+}
+
+function overlay(innerHTML){
+  const div = document.createElement('div');
+  div.className = 'overlay';
+  div.innerHTML = `<div class="sheet center">${innerHTML}</div>`;
+  div.addEventListener('click', e => { if(e.target === div){ div.remove(); } });
+  const previousFocus = document.activeElement;
+  const sheet = div.querySelector('.sheet');
+  sheet.setAttribute('role','dialog'); sheet.setAttribute('aria-modal','true');
+  const title = sheet.querySelector('h2'); if(title){ title.id = 'sheet-' + makeEntryId(); sheet.setAttribute('aria-labelledby',title.id); }
+  document.body.appendChild(div);
+  const controls = () => [...sheet.querySelectorAll('button, input, select, a[href]')].filter(e => !e.disabled && e.getClientRects().length);
+  setTimeout(() => {const target = sheet.querySelector('[autofocus]') || controls()[0]; if(target) target.focus();},0);
+  div.addEventListener('keydown', event => {
+    if([...document.querySelectorAll('.overlay')].at(-1) !== div) return;
+    if(event.key === 'Escape'){event.preventDefault(); const close = sheet.querySelector('#cf-cancel, #alert-ok, .close-x'); if(close) close.click(); else div.remove();}
+    if(event.key === 'Tab'){const list=controls(), first=list[0], last=list[list.length-1]; if(event.shiftKey && document.activeElement===first){event.preventDefault(); last?.focus();}else if(!event.shiftKey && document.activeElement===last){event.preventDefault(); first?.focus();}}
+  });
+  const observer = new MutationObserver(() => {if(!div.isConnected){observer.disconnect(); if(previousFocus?.isConnected) previousFocus.focus();}});
+  observer.observe(document.body,{childList:true});
+  return div;
+}
+
+function showSpend(){
+  const budget = activeBudget();
+  const s = computeStats(budget);
+  const titleSuffix = config.budgets.length > 1 ? ` · ${escapeHtml(budget.name)}` : '';
+  let selectedCategory = 'meal';
+
+  const quickChips = (budget.quickAmounts || DEFAULTS.quickAmounts).map(amt =>
+    `<button type="button" class="chip qa-chip" data-amt="${amt}">${fmtMoney(amt).replace(/\.00$/, '')}</button>`
+  ).join('');
+
+  const catTiles = CATEGORIES.map(c =>
+    `<button type="button" class="tile cat-tile${c.key === selectedCategory ? ' active' : ''}" data-cat="${c.key}">
+      <span class="tile-icon">${c.emoji}</span>${c.label}
+    </button>`
+  ).join('');
+
+  const ov = overlay(`
+    <button class="close-x" id="close-spend">×</button>
+    <h2>Log a purchase${titleSuffix}</h2>
+    <p class="hint">You currently have <b>${fmtMoney(s.availableToSpend)}</b> available to spend.</p>
+
+    <label>Quick amount</label>
+    <div class="chip-row">${quickChips}</div>
+
+    <label>Amount spent</label>
+    <input type="number" id="spend-amount" inputmode="decimal" step="0.01" min="0" placeholder="0.00" autofocus>
+
+    <label>Category</label>
+    <div class="tile-grid" id="cat-tile-grid">${catTiles}</div>
+
+    <label>Note</label>
+    <input type="text" id="spend-note" placeholder="Optional" maxlength="60">
+
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancel-spend">Cancel</button>
+      <button class="btn btn-primary" id="confirm-spend">Log it</button>
+    </div>
+  `);
+
+  ov.querySelectorAll('.qa-chip').forEach(btn => {
+    btn.onclick = () => { document.getElementById('spend-amount').value = btn.dataset.amt; };
+  });
+
+  ov.querySelectorAll('.cat-tile').forEach(btn => {
+    btn.onclick = () => {
+      ov.querySelectorAll('.cat-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedCategory = btn.dataset.cat;
+    };
+  });
+
+  document.getElementById('close-spend').onclick = () => ov.remove();
+  document.getElementById('cancel-spend').onclick = () => ov.remove();
+  document.getElementById('confirm-spend').onclick = async () => {
+    const amt = parseFloat(document.getElementById('spend-amount').value);
+    if(isNaN(amt) || amt <= 0){ await showAlert('Enter a valid amount.'); return; }
+
+    const currentStats = computeStats(budget);
+    if(amt > currentStats.availableToSpend){
+      const proceed = await showConfirm(
+        `This purchase is ${fmtMoney(amt - currentStats.availableToSpend)} more than your currently earned allowance of ${fmtMoney(currentStats.availableToSpend)}. Continue?`,
+        { title:'Over your pace', okLabel:'Log it anyway' }
+      );
+      if(!proceed){ return; }
+    }
+
+    const note = document.getElementById('spend-note').value.trim();
+    budget.balance = Math.round(Math.max(0, Number(budget.balance) - amt) * 100) / 100;
+    budget.history.push({
+      id: makeEntryId(), date: todayISO(), type:'spend', amount:amt,
+      category:selectedCategory, balanceAfter: budget.balance, note: note || undefined
+    });
+
+    saveConfig();
+    ov.remove();
+    render();
+    showToast('Purchase logged');
+  };
+}
+
+function showUpdate(){
+  const budget = activeBudget();
+  const titleSuffix = config.budgets.length > 1 ? ` · ${escapeHtml(budget.name)}` : '';
+
+  const ov = overlay(`
+    <button class="close-x" id="close-update">×</button>
+    <h2>Update balance${titleSuffix}</h2>
+    <p class="hint">Checked your balance? Enter the current number here to keep your tracker accurate.</p>
+    <label>Current balance</label>
+    <input type="number" id="update-amount" inputmode="decimal" step="0.01" min="0" value="${Number(budget.balance).toFixed(2)}" autofocus>
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancel-update">Cancel</button>
+      <button class="btn btn-primary" id="confirm-update">Save</button>
+    </div>
+  `);
+
+  document.getElementById('close-update').onclick = () => ov.remove();
+  document.getElementById('cancel-update').onclick = () => ov.remove();
+  document.getElementById('confirm-update').onclick = async () => {
+    const amt = parseFloat(document.getElementById('update-amount').value);
+    if(isNaN(amt) || amt < 0){ await showAlert('Enter a valid amount.'); return; }
+
+    budget.balance = amt;
+
+    /* Updating the actual balance does NOT affect earned allowance. */
+    budget.history.push({ id: makeEntryId(), date: todayISO(), type:'update', amount:null, balanceAfter: amt });
+
+    saveConfig();
+    ov.remove();
+    render();
+    showToast('Balance updated');
+  };
+}
+
+function showInsights(){
+  const budget = activeBudget();
+  const titleSuffix = config.budgets.length > 1 ? ` · ${escapeHtml(budget.name)}` : '';
+  const { s, weekKeys, weekTotals, maxWeek, catEntries, maxCat, projection } = computeInsights(budget);
+  const target = computeTodayTarget(s);
+
+  const weekRows = weekKeys.length ? weekKeys.map(k => {
+    const amt = weekTotals[k];
+    const pct = Math.max(4, (amt / maxWeek) * 100);
+    return `
+      <div class="bar-row">
+        <span class="bar-row-label">${fmtDate(k)}</span>
+        <div class="bar-track"><div class="bar-track-fill" style="width:${pct}%"></div></div>
+        <span class="bar-row-amt">${fmtMoney(amt)}</span>
+      </div>`;
+  }).join('') : '<div class="empty">Log a few purchases to see weekly trends</div>';
+
+  const catRows = catEntries.length ? catEntries.map(([key, amt]) => {
+    const meta = CATEGORIES.find(c => c.key === key) || CATEGORIES[CATEGORIES.length - 1];
+    const pct = Math.max(4, (amt / maxCat) * 100);
+    const share = s.totalSpent > 0 ? Math.round((amt / s.totalSpent) * 100) : 0;
+    return `
+      <div class="bar-row">
+        <span class="bar-row-label">${meta.emoji} ${meta.label}</span>
+        <div class="bar-track"><div class="bar-track-fill" style="width:${pct}%; background:${meta.color};"></div></div>
+        <span class="bar-row-amt">${fmtMoney(amt)} · ${share}%</span>
+      </div>`;
+  }).join('') : '<div class="empty">No categorized purchases yet</div>';
+
+  let projectionHtml;
+  if(projection.status === 'none'){
+    projectionHtml = `<div class="note">Log some purchases to see your spending projection.</div>`;
+  }else if(projection.status === 'good'){
+    projectionHtml = `<div class="note note-good">On pace — projected to finish the term with about <b>${fmtMoney(Math.max(0, projection.projectedLeftover))}</b> left over.</div>`;
+  }else{
+    const when = projection.runOutDate ? `around <b>${fmtDate(projection.runOutDate)}</b>` : 'before the term ends';
+    projectionHtml = `<div class="note note-bad">At your current pace (${fmtMoney(projection.avgPerDay)}/day) you're projected to run out ${when}.</div>`;
+  }
+
+  const paceHint = target !== null
+    ? `<p class="hint">Suggested pace: about <b>${fmtMoney(target)}</b>/day, or <b>${fmtMoney(target * 7)}</b>/week, to stay on track.</p>`
+    : '';
+
+  const ov = overlay(`
+    <button class="close-x" id="close-insights">×</button>
+    <h2>Insights${titleSuffix}</h2>
+    <p class="hint">A closer look at your spending pace and habits.</p>
+    ${paceHint}
+
+    ${projectionHtml}
+
+    <div class="section-title">Weekly spending</div>
+    ${weekRows}
+
+    <div class="section-title">By category</div>
+    ${catRows}
+
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="share-card-btn" style="flex:1;">Share card</button>
+      <button class="btn btn-primary" id="close-insights-2" style="flex:1;">Done</button>
+    </div>
+  `);
+
+  document.getElementById('close-insights').onclick = () => ov.remove();
+  document.getElementById('close-insights-2').onclick = () => ov.remove();
+  document.getElementById('share-card-btn').onclick = () => shareBudgetCardImage(budget, s);
+}
+
+function showTermForm(){
+  let holidays = [...config.holidays];
+
+  function holidaysHtml(){
+    if(!holidays.length) return '<div class="empty" style="padding:4px 0;">No skipped days added</div>';
+    return holidays.slice().sort().map(iso => `
+      <div class="holiday-row" data-date="${iso}">
+        <span>${fmtDate(iso)}</span>
+        <button type="button" class="chip-x" data-remove="${iso}">×</button>
+      </div>
+    `).join('');
+  }
+
+  const ov = overlay(`
+    <button class="close-x" id="close-term-form">×</button>
+    <h2>Term settings</h2>
+    <p class="hint">Your spending allowance is spread evenly across each weekday in this range, minus any days you skip below.</p>
+    <label>Term label</label>
+    <input type="text" id="tf-label" value="${escapeHtml(config.termLabel)}" maxlength="30">
+    <div class="row2">
+      <div><label>Start date</label><input type="date" id="tf-start" value="${config.termStart}"></div>
+      <div><label>End date</label><input type="date" id="tf-end" value="${config.termEnd}"></div>
+    </div>
+    <label>Skip days (breaks, holidays)</label>
+    <div class="row2">
+      <input type="date" id="tf-holiday-input">
+      <button type="button" class="btn btn-secondary" id="tf-add-holiday" style="flex:0 0 auto; padding:12px 16px;">Add</button>
+    </div>
+    <div id="tf-holiday-list" style="margin-top:10px;">${holidaysHtml()}</div>
+
+    <label>Total class days</label>
+    <input type="number" id="tf-total-override" inputmode="numeric" min="1" step="1"
+      value="${config.totalDaysOverride || ''}"
+      placeholder="Auto: ${schoolDays({ termStart: config.termStart, termEnd: config.termEnd, holidays }).length} from the dates above">
+    <p class="hint" style="margin-top:6px;">Leave blank to count weekdays automatically. Set this if your school publishes an official class-day count that runs different from a plain weekday count.</p>
+
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancel-term-form">Cancel</button>
+      <button class="btn btn-primary" id="save-term-form">Save</button>
+    </div>
+  `);
+
+  function updateAutoPlaceholder(){
+    const start = document.getElementById('tf-start').value;
+    const end = document.getElementById('tf-end').value;
+    const input = document.getElementById('tf-total-override');
+    if(start && end && start <= end){
+      input.placeholder = `Auto: ${schoolDays({ termStart: start, termEnd: end, holidays }).length} from the dates above`;
+    }else{
+      input.placeholder = 'Auto: computed from the dates above';
+    }
+  }
+
+  function wireRemove(){
+    ov.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.onclick = () => { holidays = holidays.filter(d => d !== btn.dataset.remove); refreshHolidays(); };
+    });
+  }
+  function refreshHolidays(){
+    ov.querySelector('#tf-holiday-list').innerHTML = holidaysHtml();
+    wireRemove();
+    updateAutoPlaceholder();
+  }
+  wireRemove();
+
+  document.getElementById('tf-start').addEventListener('input', updateAutoPlaceholder);
+  document.getElementById('tf-end').addEventListener('input', updateAutoPlaceholder);
+
+  document.getElementById('tf-add-holiday').onclick = () => {
+    const v = document.getElementById('tf-holiday-input').value;
+    if(v && !holidays.includes(v)){ holidays.push(v); refreshHolidays(); }
+  };
+
+  document.getElementById('close-term-form').onclick = () => ov.remove();
+  document.getElementById('cancel-term-form').onclick = () => ov.remove();
+  document.getElementById('save-term-form').onclick = async () => {
+    const label = document.getElementById('tf-label').value.trim();
+    const start = document.getElementById('tf-start').value;
+    const end = document.getElementById('tf-end').value;
+    if(!start || !end || start > end){ await showAlert('Enter a valid date range.'); return; }
+
+    const overrideRaw = parseInt(document.getElementById('tf-total-override').value, 10);
+    const totalDaysOverride = (!isNaN(overrideRaw) && overrideRaw > 0) ? overrideRaw : null;
+
+    config.termLabel = label || DEFAULTS.termLabel;
+    config.termStart = start;
+    config.termEnd = end;
+    config.holidays = holidays;
+    config.totalDaysOverride = totalDaysOverride;
+    saveConfig();
+
+    document.querySelectorAll('.overlay').forEach(o => o.remove());
+    render();
+    showToast('Term updated');
+  };
+}
+
+function showSettings(){
+  const budgetRows = config.budgets.map(b => {
+    const meta = FUND_TYPES.find(t => t.key === b.type) || FUND_TYPES[FUND_TYPES.length - 1];
+    return `
+    <button type="button" class="row-flat" data-edit-budget="${b.id}">
+      <div class="row-flat-left">
+        <span class="row-flat-icon">${meta.emoji}</span>
+        <div class="row-flat-label">${escapeHtml(b.name)}${b.id === config.activeBudgetId ? '<span class="active-chip">ACTIVE</span>' : ''}</div>
+      </div>
+      <div class="row-flat-amt">${fmtMoney(b.totalBudget)}</div>
+    </button>
+  `;}).join('');
+
+  const dataTiles = [
+    { id:'btn-export-csv', label:'Export CSV', icon:'<path d="M12 3v10"/><path d="M8 9l4 4 4-4"/><path d="M5 21h14"/>' },
+    { id:'btn-export-backup', label:'Backup', icon:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 7l2-4h14l2 4"/><line x1="9" y1="12" x2="15" y2="12"/>' },
+    { id:'btn-import-backup', label:'Restore', icon:'<path d="M12 16V6"/><path d="M8 10l4-4 4 4"/><path d="M5 21h14"/>' },
+    { id:'btn-share-summary', label:'Share', icon:'<path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>' }
+  ].map(t => `
+    <button type="button" class="tile" id="${t.id}">
+      <span class="tile-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg></span>
+      ${t.label}
+    </button>
+  `).join('');
+
+  const ov = overlay(`
+    <button class="close-x" id="close-settings">×</button>
+    <h2>Settings</h2>
+
+    <div class="section-title">Term</div>
+    <button type="button" class="row-flat" id="edit-term-btn">
+      <div class="row-flat-left">
+        <span class="row-flat-icon">🗓️</span>
+        <div>
+          <div class="row-flat-label">${escapeHtml(config.termLabel)}</div>
+          <div class="row-flat-sub">${fmtDate(config.termStart)} – ${fmtDate(config.termEnd)}${config.holidays.length ? ` · ${config.holidays.length} day${config.holidays.length===1?'':'s'} skipped` : ''}</div>
+        </div>
+      </div>
+      <div class="row-flat-amt">Edit</div>
+    </button>
+
+    <div class="section-title">Funds</div>
+    <div>${budgetRows}</div>
+    <button class="btn btn-secondary btn-wide" id="add-budget-btn" style="margin-top:12px;">+ Add a fund</button>
+
+    <div class="section-title">Appearance</div>
+    <div class="segmented" id="theme-segmented">
+      <button type="button" class="seg-btn${config.themeMode==='system'?' active':''}" data-theme-mode="system">System</button>
+      <button type="button" class="seg-btn${config.themeMode==='light'?' active':''}" data-theme-mode="light">Light</button>
+      <button type="button" class="seg-btn${config.themeMode==='dark'?' active':''}" data-theme-mode="dark">Dark</button>
+    </div>
+
+    <div class="section-title">Data</div>
+    <div class="tile-grid cols-2">${dataTiles}</div>
+    <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+
+    <div class="section-title">Storage</div>
+    <div id="account-section">${accountSectionHtml()}</div>
+
+    <div class="sheet-actions">
+      <button class="btn btn-primary" id="close-settings-2" style="flex:1;">Done</button>
+    </div>
+    <button class="link" id="reset-all">Reset all data and start over</button>
+  `);
+
+  wireAccountSection(document.getElementById('account-section'));
+
+  document.getElementById('close-settings').onclick = () => ov.remove();
+  document.getElementById('close-settings-2').onclick = () => ov.remove();
+
+  document.getElementById('edit-term-btn').onclick = () => showTermForm();
+
+  ov.querySelectorAll('[data-edit-budget]').forEach(btn => {
+    btn.onclick = () => showBudgetForm(btn.dataset.editBudget);
+  });
+  document.getElementById('add-budget-btn').onclick = () => showBudgetForm(null);
+
+  ov.querySelectorAll('[data-theme-mode]').forEach(btn => {
+    btn.onclick = () => {
+      config.themeMode = btn.dataset.themeMode;
+      applyTheme();
+      saveConfig();
+      ov.querySelectorAll('[data-theme-mode]').forEach(b => b.classList.toggle('active', b === btn));
+    };
+  });
+
+  document.getElementById('btn-export-csv').onclick = () => exportCSV();
+  document.getElementById('btn-export-backup').onclick = () => exportBackup();
+  document.getElementById('btn-share-summary').onclick = () => shareSummary();
+  document.getElementById('btn-import-backup').onclick = () => document.getElementById('import-file-input').click();
+  document.getElementById('import-file-input').onchange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if(file){ importBackupFile(file); }
+    e.target.value = '';
+  };
+
+  document.getElementById('reset-all').onclick = async () => {
+    const ok = await showConfirm(
+      'This clears every fund, all history, and your settings. This cannot be undone.',
+      { title:'Reset all data?', okLabel:'Reset', danger:true }
+    );
+    if(ok){
+      localStorage.removeItem(CONFIG_KEY);
+      config = cloneDefaults();
+      applyTheme();
+      ov.remove();
+      render();
+    }
+  };
+}
+
+function showBudgetForm(budgetId){
+  const existing = budgetId ? config.budgets.find(b => b.id === budgetId) : null;
+  const isNew = !existing;
+  let selectedType = existing ? existing.type : 'dining';
+
+  const typeChips = FUND_TYPES.map(t => `
+    <button type="button" class="tile fund-type-tile${t.key === selectedType ? ' active' : ''}" data-type="${t.key}">
+      <span class="tile-icon">${t.emoji}</span>${t.label}
+    </button>`).join('');
+
+  const ov = overlay(`
+    <button class="close-x" id="close-budget-form">×</button>
+    <h2>${isNew ? 'Add a fund' : 'Edit fund'}</h2>
+    <p class="hint">${isNew ? 'Track a separate pot — like a bookstore allowance or campus cash — alongside your other funds.' : "Update this fund's details and quick-log presets."}</p>
+    <label>Fund type</label>
+    <div class="tile-grid" id="bf-type-grid">${typeChips}</div>
+    <label>Name</label>
+    <input type="text" id="bf-name" value="${existing ? escapeHtml(existing.name) : ''}" placeholder="e.g. Bookstore Funds" maxlength="30">
+    <div class="row2">
+      <div>
+        <label>Total for term</label>
+        <input type="number" id="bf-total" value="${existing ? existing.totalBudget : DEFAULTS.totalBudget}" step="1" min="1">
+      </div>
+      ${isNew ? `
+      <div>
+        <label>Current balance</label>
+        <input type="number" id="bf-balance" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 200.00">
+      </div>` : `
+      <div>
+        <label>Reserve to keep</label>
+        <input type="number" id="bf-reserve" value="${existing.targetReserve || 0}" step="1" min="0">
+      </div>`}
+    </div>
+    ${isNew ? '' : `<p class="hint" style="margin-top:-6px;">Reserve is money you'd like left over at the term's end — pace targets aim to leave this untouched.</p>`}
+    <label>Quick log amounts</label>
+    <input type="text" id="bf-quick" value="${(existing ? existing.quickAmounts : DEFAULTS.quickAmounts).join(', ')}" placeholder="5, 8, 12, 15">
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancel-budget-form">Cancel</button>
+      <button class="btn btn-primary" id="save-budget-form">${isNew ? 'Add fund' : 'Save'}</button>
+    </div>
+    ${(!isNew && config.budgets.length > 1) ? `<button class="link" id="delete-budget-form">Delete this fund</button>` : ''}
+  `);
+
+  document.querySelectorAll('.fund-type-tile').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.fund-type-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedType = btn.dataset.type;
+    };
+  });
+
+  document.getElementById('close-budget-form').onclick = () => ov.remove();
+  document.getElementById('cancel-budget-form').onclick = () => ov.remove();
+
+  document.getElementById('save-budget-form').onclick = async () => {
+    const nameRaw = document.getElementById('bf-name').value.trim();
+    const totalRaw = parseFloat(document.getElementById('bf-total').value);
+    const quickRaw = document.getElementById('bf-quick').value;
+    const parsedQuick = quickRaw.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v) && v > 0);
+    const quickAmounts = parsedQuick.length ? parsedQuick : [...DEFAULTS.quickAmounts];
+
+    if(isNaN(totalRaw) || totalRaw <= 0){
+      await showAlert('Enter a valid total for the term.');
+      return;
+    }
+
+    if(isNew){
+      const balanceRaw = parseFloat(document.getElementById('bf-balance').value);
+      if(isNaN(balanceRaw) || balanceRaw < 0){
+        await showAlert('Enter a starting balance to continue.');
+        return;
+      }
+      const name = nameRaw || FUND_TYPES.find(t => t.key === selectedType).label;
+      const spentBeforeSetup = Math.max(0, totalRaw - balanceRaw);
+      const budget = makeBudget({
+        name, type: selectedType, totalBudget: totalRaw, balance: balanceRaw, quickAmounts,
+        history:[{
+          id: makeEntryId(), date: todayISO(), type:'setup',
+          amount: spentBeforeSetup > 0 ? spentBeforeSetup : null,
+          category:'other', balanceAfter: balanceRaw, note:'Starting balance entered'
+        }]
+      });
+      config.budgets.push(budget);
+      config.activeBudgetId = budget.id;
+      saveConfig();
+      document.querySelectorAll('.overlay').forEach(o => o.remove());
+      render();
+      showToast('Fund added');
+    }else{
+      const reserveRaw = parseFloat(document.getElementById('bf-reserve').value);
+      existing.name = nameRaw || existing.name;
+      existing.type = selectedType;
+      existing.totalBudget = totalRaw;
+      existing.targetReserve = (!isNaN(reserveRaw) && reserveRaw >= 0) ? reserveRaw : 0;
+      existing.quickAmounts = quickAmounts;
+      saveConfig();
+      document.querySelectorAll('.overlay').forEach(o => o.remove());
+      render();
+      showToast('Fund updated');
+    }
+  };
+
+  const deleteBtn = document.getElementById('delete-budget-form');
+  if(deleteBtn){
+    deleteBtn.onclick = async () => {
+      const ok = await showConfirm(
+        `This deletes "${existing.name}" and its entire history. This cannot be undone.`,
+        { title:'Delete this fund?', okLabel:'Delete', danger:true }
+      );
+      if(!ok) return;
+
+      config.budgets = config.budgets.filter(b => b.id !== existing.id);
+      if(!config.budgets.length){
+        config.budgets = [makeBudget({ id:'fund-1', name:'Campus Fund', type:'dining' })];
+      }
+      if(config.activeBudgetId === existing.id){
+        config.activeBudgetId = config.budgets[0].id;
+      }
+      saveConfig();
+      document.querySelectorAll('.overlay').forEach(o => o.remove());
+      render();
+      showToast('Fund deleted');
+    };
+  }
+}
+
+function showHistory(){
+  const budget = activeBudget();
+  const titleSuffix = config.budgets.length > 1 ? ` · ${escapeHtml(budget.name)}` : '';
+  let query = '';
+  let activeCat = 'all';
+
+  const catChips = ['all', ...CATEGORIES.map(c => c.key)];
+
+  function rowsHtml(){
+    const entries = budget.history.slice().reverse().filter(h => {
+      if(activeCat !== 'all' && (h.category || 'other') !== activeCat) return false;
+      if(!query) return true;
+      const meta = historyRowMeta(h);
+      const hay = `${meta.label} ${h.note || ''} ${fmtDate(h.date)}`.toLowerCase();
+      return hay.includes(query.toLowerCase());
+    });
+    if(!entries.length) return '<div class="empty">No matching transactions</div>';
+    return entries.map(h => {
+      const meta = historyRowMeta(h);
+      const editable = h.type === 'spend';
+      return `
+        <button type="button" class="row-flat" data-entry="${h.id}" ${editable ? '' : 'disabled'}>
+          <div class="row-flat-left">
+            <span class="row-flat-icon">${meta.icon}</span>
+            <div>
+              <div class="row-flat-label">${meta.label}</div>
+              <div class="row-flat-sub">${fmtDate(h.date)}${h.note ? ' · ' + escapeHtml(h.note) : ''}</div>
+            </div>
+          </div>
+          <div class="row-flat-amt">${fmtMoney(h.balanceAfter)}</div>
+        </button>`;
+    }).join('');
+  }
+
+  const ov = overlay(`
+    <button class="close-x" id="close-history">×</button>
+    <h2>All activity${titleSuffix}</h2>
+    <input type="text" id="hist-search" placeholder="Search transactions" style="margin-bottom:10px;">
+    <div class="chip-row" id="hist-cats">
+      ${catChips.map(k => {
+        const meta = k === 'all' ? { label:'All' } : CATEGORIES.find(c => c.key === k);
+        return `<button type="button" class="chip cat-chip${k === 'all' ? ' active' : ''}" data-cat="${k}">${meta.label}</button>`;
+      }).join('')}
+    </div>
+    <div id="hist-rows" style="margin-top:12px;">${rowsHtml()}</div>
+  `);
+
+  function refresh(){
+    document.getElementById('hist-rows').innerHTML = rowsHtml();
+    wireRows();
+  }
+
+  function wireRows(){
+    document.querySelectorAll('#hist-rows .row-flat:not(:disabled)').forEach(btn => {
+      btn.onclick = () => showEditEntry(budget, btn.dataset.entry, refresh);
+    });
+  }
+
+  document.getElementById('close-history').onclick = () => ov.remove();
+  document.getElementById('hist-search').oninput = (e) => { query = e.target.value; refresh(); };
+  ov.querySelectorAll('.cat-chip').forEach(btn => {
+    btn.onclick = () => {
+      ov.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCat = btn.dataset.cat;
+      refresh();
+    };
+  });
+  wireRows();
+}
+
+function showEditEntry(budget, entryId, onDone){
+  const entry = budget.history.find(h => h.id === entryId);
+  if(!entry) return;
+
+  let selectedCategory = entry.category || 'other';
+  const catTiles = CATEGORIES.map(c =>
+    `<button type="button" class="tile cat-tile${c.key === selectedCategory ? ' active' : ''}" data-cat="${c.key}">
+      <span class="tile-icon">${c.emoji}</span>${c.label}
+    </button>`
+  ).join('');
+
+  const ov = overlay(`
+    <button class="close-x" id="close-edit-entry">×</button>
+    <h2>Edit transaction</h2>
+    <p class="hint">${fmtDate(entry.date)}</p>
+    <label>Amount</label>
+    <input type="number" id="ee-amount" inputmode="decimal" step="0.01" min="0" value="${Number(entry.amount).toFixed(2)}">
+    <label>Category</label>
+    <div class="tile-grid" id="ee-cat-grid">${catTiles}</div>
+    <label>Note</label>
+    <input type="text" id="ee-note" value="${entry.note ? escapeHtml(entry.note) : ''}" placeholder="Optional" maxlength="60">
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancel-edit-entry">Cancel</button>
+      <button class="btn btn-primary" id="save-edit-entry">Save</button>
+    </div>
+    <button class="link" id="delete-edit-entry">Delete this transaction</button>
+  `);
+
+  ov.querySelectorAll('.cat-tile').forEach(btn => {
+    btn.onclick = () => {
+      ov.querySelectorAll('.cat-tile').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedCategory = btn.dataset.cat;
+    };
+  });
+
+  document.getElementById('close-edit-entry').onclick = () => ov.remove();
+  document.getElementById('cancel-edit-entry').onclick = () => ov.remove();
+
+  document.getElementById('save-edit-entry').onclick = async () => {
+    const amt = parseFloat(document.getElementById('ee-amount').value);
+    if(isNaN(amt) || amt <= 0){ await showAlert('Enter a valid amount.'); return; }
+    entry.amount = amt;
+    entry.category = selectedCategory;
+    const note = document.getElementById('ee-note').value.trim();
+    entry.note = note || undefined;
+    recomputeBalances(budget);
+    saveConfig();
+    render();
+    ov.remove();
+    showToast('Transaction updated');
+    if(onDone){ onDone(); }
+  };
+
+  document.getElementById('delete-edit-entry').onclick = async () => {
+    const ok = await showConfirm('This removes the transaction and recalculates your balance.', { title:'Delete transaction?', okLabel:'Delete', danger:true });
+    if(!ok) return;
+    budget.history = budget.history.filter(h => h.id !== entryId);
+    recomputeBalances(budget);
+    saveConfig();
+    render();
+    ov.remove();
+    showToast('Transaction deleted');
+    if(onDone){ onDone(); }
+  };
+}
+
+window.addEventListener('storage', event => {
+  if(event.key === CONFIG_KEY && !document.querySelector('.overlay')) {loadState(); render();}
+});
+document.addEventListener('visibilitychange', () => {if(!document.hidden && !document.querySelector('.overlay')) {loadState(); render();}});
+
+(function init(){
+  loadState();
+  render();
+})();

@@ -298,3 +298,18 @@ input[type=date] { min-width: 0; }
  .tracker .balance-line { grid-template-columns: 1fr; gap: 20px; }
  .tracker .balance-line strong { font-size: 44px; }
 }
+.meal-periods {display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:20px;margin:24px 0 12px;}
+.meal-periods > div {padding:18px 0;border-top:2px solid var(--line);}
+.meal-periods > .lunch-period {border-top-color:var(--orange);}
+.meal-periods span,.meal-periods strong,.meal-periods small {display:block;}
+.meal-periods span,.meal-periods small {color:var(--muted);font-size:13px;}
+.meal-periods strong {font-size:22px;margin:5px 0;}
+.rush-chart-scroll {overflow-x:auto;padding:0 0 10px;scrollbar-color:#7b8da2 var(--paper);}
+.rush-chart {grid-template-columns:repeat(19,minmax(0,1fr));gap:9px;min-width:800px;margin-top:20px;}
+.rush-column {border:0;background:none;padding:0;min-height:0;color:var(--muted);font-family:inherit;}
+.rush-column:hover .rush-bar {background:#b2c4d9;}
+.rush-column:nth-child(n) .rush-bar {background:#ccd8e5;color:var(--navy);}
+.rush-column.meal-peak .rush-bar {background:var(--navy);color:white;}
+.rush-column.lunch-peak .rush-bar {background:var(--orange);color:var(--navy);}
+.rush-column.selected-time > span:last-child {font-weight:600;color:var(--orange-ink);text-decoration:underline;text-underline-offset:4px;}
+@media(max-width:760px){.meal-periods{gap:12px;grid-template-columns:1fr;}.meal-periods>div{display:grid;grid-template-columns:1fr auto;gap:2px 15px;padding:13px 0;}.meal-periods strong{font-size:19px;margin:0;}.meal-periods small{grid-column:1/-1;}.rush-chart{gap:9px;}}
