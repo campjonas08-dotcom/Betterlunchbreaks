@@ -10,3 +10,5 @@ Retained: original daily accrual/rollover calculations, onboarding/tutorial, mul
 Integration changes: Auburn palette/fonts/navigation; prominent daily spending budget; migration of prior `better-lunch-budget-v2` balances/history to the original `stipend_config_v5` format; storage warning; sheet keyboard focus/Escape handling; spreadsheet-safe CSV cells; cross-tab updates. Existing source format and backup compatibility are retained.
 
 The reference site's configured Firebase project, external sync module, manifest and origin-wide service worker were not copied. This embedded tracker stores data locally and supports Backup/Restore for moving it. It does not contact or write into the reference Firebase project. The complete local tracker remains functional without external runtime dependencies.
+
+The integrated tracker also seeds a new, unsaved installation with 20 recent sample purchases, a consistent balance and relative term dates. Existing source/legacy data takes precedence. Sample history uses normal editable entries and is saved once. Settings can explicitly load samples; “Use my own budget” starts empty setup without reseeding on refresh.

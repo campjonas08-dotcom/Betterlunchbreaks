@@ -49,3 +49,7 @@ Push to the existing `main` branch without changing repository visibility or Pag
 - https://campjonas08-dotcom.github.io/Betterlunchbreaks/dollars.html
 
 A push is separate from deployment success. GitHub Actions is accessible in this environment; direct public Pages browsing may be blocked by network policy. Publishing the reusable cloud environment is separate from website deployment.
+
+## Sample tracker content
+
+A new tracker opens with a $500 term fund, a $25 reserve, and 20 recent sample meal, coffee, snack and grocery purchases. Balance is $319.55 after $180.45 spent. Purchase dates are relative to first use and then persist normally; refresh does not regenerate or duplicate history. The sample supports all normal logging, editing, insights, export and backup features. Existing saved data and migrated balances take precedence and are never auto-replaced. Use Settings → Load sample data to explicitly replace a saved tracker (with confirmation), or “Use my own budget” to clear samples and enter a personal budget. Choosing a fresh budget persists the empty setup so refresh does not reseed it.

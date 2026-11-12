@@ -39,3 +39,6 @@ input[type=date] { min-width:0; }
 @media(max-width:600px) { .site-header { gap:10px; padding:14px 18px; flex-wrap:wrap; } .site-brand {font-size:18px;} .site-header nav {margin-left:auto;} .site-header nav a {font-size:13px;padding:9px;} .hero-metric-num{font-size:54px;} .wrap{padding-inline:20px;} }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after {animation:none!important;transition:none!important;} }
 .toast { bottom:calc(86px + env(safe-area-inset-bottom)); }
+.sample-spending {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;margin:8px 0 4px;border-bottom:1px solid var(--rule);font-size:12px;color:var(--muted);}
+.sample-spending button {flex-shrink:0;background:none;border:0;color:var(--gold);font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px;}
+@media(max-width:370px){.sample-spending{align-items:flex-start;flex-direction:column;gap:0;}}

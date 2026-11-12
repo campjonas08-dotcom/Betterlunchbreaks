@@ -33,6 +33,17 @@ with sync_playwright() as p:
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.locator('h1').click();page.screenshot(path=str(ARTIFACTS/f'{label}-daily-dining.png'),full_page=True)
         page.locator('.page-nav').get_by_role('link',name='Dining Dollars').click()
+        expect(page.locator('.sample-spending')).to_be_visible()
+        assert page.evaluate('activeBudget().history.filter(h=>h.type==="spend").length')==20
+        assert page.evaluate('activeBudget().balance')==319.55
+        page.locator('#tab-log').click();page.locator('[data-amt="5"]').click();page.locator('#spend-note').fill('Sample flow check');page.locator('#confirm-spend').click()
+        if page.locator('#cf-ok').count():page.locator('#cf-ok').click()
+        assert page.evaluate('activeBudget().balance')==314.55
+        page.reload();assert page.evaluate('activeBudget().balance')==314.55
+        page.locator('#open-history').click();page.locator('#hist-search').fill('Sample flow check');page.locator('#hist-rows [data-entry]').click();page.locator('#delete-edit-entry').click();page.locator('#cf-ok').click();page.locator('#close-history').click()
+        assert page.evaluate('activeBudget().balance')==319.55
+        page.locator('h1').click();page.screenshot(path=str(ARTIFACTS/f'{label}-sample-tracker.png'),full_page=True)
+        page.locator('#start-personal').click();page.locator('#cf-ok').click()
         expect(page.locator('#ob-start-btn')).to_be_visible()
         page.locator('#ob-balance').fill('500');page.locator('#ob-term-start').fill('2026-01-05');page.locator('#ob-term-end').fill('2026-12-18')
         page.locator('#ob-start-btn').click();page.locator('#close-tutorial').click()
@@ -70,6 +81,8 @@ with sync_playwright() as p:
             page.keyboard.press('Tab');assert page.evaluate("Boolean(document.activeElement.closest('[role=dialog]'))")
         page.keyboard.press('Escape');expect(page.locator('.overlay')).to_have_count(0)
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.locator('#tab-settings').click();page.locator('#load-sample-data').click();page.locator('#cf-cancel').click();page.locator('#close-settings').click()
+        assert not page.evaluate('Boolean(config.sampleData)')
         page.locator('h1').click();page.screenshot(path=str(ARTIFACTS/f'{label}-full-tracker.png'),full_page=True)
         assert not errors,errors
         print(f'PASS {label}: automatic Auburn time, synchronized occupancy/seats over 40 minutes, bounded table wait, full tracker onboarding, daily metrics, purchase/edit/delete, persistence, insights, balance correction, CSV/backup/restore, holidays, multiple funds, themes, keyboard sheets and layout')
@@ -82,9 +95,9 @@ with sync_playwright() as p:
     assert page.evaluate('activeBudget().targetReserve')==50
     assert page.evaluate('activeBudget().history[1].note')=='Existing lunch'
     page.reload();assert page.evaluate('activeBudget().balance')==388
-    print('PASS old balance/history/term migration and reload')
+    print('PASS old balance/history/term migration and reload; existing data not replaced by samples')
     context.close()
     context=browser.new_context();context.add_init_script("Object.defineProperty(window,'localStorage',{get(){throw Error('blocked')}})")
-    page=context.new_page();page.goto(BASE+'dollars.html');expect(page.locator('#storage-warning')).to_be_visible();page.locator('#ob-balance').fill('500');page.locator('#ob-start-btn').click();page.locator('#close-tutorial').click();expect(page.locator('.hero-metric')).to_be_visible()
+    page=context.new_page();page.goto(BASE+'dollars.html');expect(page.locator('#storage-warning')).to_be_visible();expect(page.locator('.hero-metric')).to_be_visible();assert page.evaluate('activeBudget().balance')==319.55
     print('PASS storage-unavailable session with visible warning')
     print('Browser:',browser.version);browser.close()

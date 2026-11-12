@@ -167,6 +167,36 @@ function cloneDefaults(){
   };
 }
 
+// Recent, dated sample purchases use the same editable history model as real entries.
+function makeSampleConfig(){
+  const now=todayISO(), start=isoPlusDays(now,-49), end=isoPlusDays(now,62);
+  const purchases=[
+    [-21,11.85,'meal','Lunch at The Edge'],[-20,4.75,'coffee','Iced latte before class'],
+    [-19,12.25,'meal','Dinner with friends'],[-18,3.50,'snack','Afternoon granola bar'],
+    [-17,18.40,'grocery','Fruit and breakfast staples'],[-16,9.95,'meal','Quick lunch between classes'],
+    [-15,5.25,'coffee','Cold brew and a study break'],[-14,10.95,'meal','Dinner at The Edge'],
+    [-12,13.50,'meal','Lunch after lab'],[-11,4.65,'coffee','Morning coffee'],
+    [-10,3.25,'snack','Late-afternoon snack'],[-9,11.75,'meal','Lunch with a classmate'],
+    [-8,16.80,'grocery','Snacks for the week'],[-7,4.95,'coffee','Coffee before lecture'],
+    [-6,12.45,'meal','Dinner after studying'],[-4,10.85,'meal','Lunch at The Edge'],
+    [-3,5.15,'coffee','Iced coffee'],[-2,3.75,'snack','Study-session snack'],
+    [-1,11.95,'meal','Dinner with friends'],[0,4.50,'coffee','Coffee on the way to class']
+  ];
+  let balance=500;
+  const history=[{id:makeEntryId(),date:start,type:'setup',amount:null,balanceAfter:balance,category:'other',note:'Term Dining Dollars loaded'}];
+  purchases.forEach(([offset,amount,category,note])=>{
+    balance=Math.round((balance-amount)*100)/100;
+    history.push({id:makeEntryId(),date:isoPlusDays(now,offset),type:'spend',amount,category,note,balanceAfter:balance});
+  });
+  return Object.assign(cloneDefaults(),{sampleData:true,setupComplete:true,tutorialSeen:true,installBannerDismissed:true,termStart:start,termEnd:end,termLabel:guessTermLabel(now),budgets:[makeBudget({id:'fund-1',name:'Dining Dollars',type:'dining',totalBudget:500,targetReserve:25,balance,history})]});
+}
+
+async function loadSampleData(){
+  const ok=await showConfirm('Replace the current tracker with sample purchases? Download a backup in Settings first if you want to keep your current data.',{title:'Load sample spending?',okLabel:'Load sample data'});
+  if(!ok)return;
+  config=makeSampleConfig();saveConfig();document.querySelectorAll('.overlay').forEach(el=>el.remove());render();showToast('Sample spending loaded');
+}
+
 function activeBudget(){
   return config.budgets.find(b => b.id === config.activeBudgetId) || config.budgets[0];
 }
@@ -322,7 +352,8 @@ function loadState(){
   }
 
   if(!config){
-    config = migrateLunchBudget() || migrateFromV4() || migrateLegacyV3() || cloneDefaults();
+    config = migrateLunchBudget() || migrateFromV4() || migrateLegacyV3();
+    if(!config){config=makeSampleConfig();saveConfig();}
   }
 
   config = upgradeConfigShape(config);
@@ -1295,6 +1326,7 @@ function mainView(){
     <div class="wrap">
       ${bannersHtml()}
       ${multi ? budgetTabsHtml() : ''}
+      ${config.sampleData ? '<div class="sample-spending"><span>Sample spending · Edit and try any feature.</span><button id="start-personal" type="button">Use my own budget</button></div>' : ''}
 
       <div class="hero-metric">
         <div class="hero-metric-label">${escapeHtml(budget.name)} · available to spend</div>
@@ -1370,6 +1402,13 @@ function mainView(){
 }
 
 function wireMain(){
+  const personal=document.getElementById('start-personal');
+  if(personal)personal.onclick=async()=>{
+    const ok=await showConfirm('Clear the sample spending and set up your own budget?',{title:'Start your own budget?',okLabel:'Start fresh'});
+    if(!ok)return;
+    config=cloneDefaults();saveConfig();document.querySelectorAll('.overlay').forEach(el=>el.remove());render();
+  };
+
   document.getElementById('open-tutorial').onclick = () => showTutorial();
   document.getElementById('open-update').onclick = () => showUpdate();
 
@@ -1746,7 +1785,7 @@ function showSettings(){
       <button type="button" class="seg-btn${config.themeMode==='dark'?' active':''}" data-theme-mode="dark">Dark</button>
     </div>
 
-    <div class="section-title">Data</div>
+    <div class="section-title">Data</div><button class="btn btn-secondary btn-wide" id="load-sample-data">Load sample data</button>
     <div class="tile-grid cols-2">${dataTiles}</div>
     <input type="file" id="import-file-input" accept="application/json" style="display:none;">
 
@@ -1780,6 +1819,7 @@ function showSettings(){
     };
   });
 
+  document.getElementById('load-sample-data').onclick=loadSampleData;
   document.getElementById('btn-export-csv').onclick = () => exportCSV();
   document.getElementById('btn-export-backup').onclick = () => exportBackup();
   document.getElementById('btn-share-summary').onclick = () => shareSummary();
@@ -1798,6 +1838,7 @@ function showSettings(){
     if(ok){
       localStorage.removeItem(CONFIG_KEY);
       config = cloneDefaults();
+      saveConfig();
       applyTheme();
       ov.remove();
       render();
