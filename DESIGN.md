@@ -103,7 +103,7 @@ Preserve the incumbent Auburn-inspired navy (#0c2340), orange (#e87722), warm or
 
 ## Layout
 
-The centered desktop surface is 1140px wide with 28px side clearance. Hall estimates pair two primary statistics with a navy forecast panel. On phones, statistics remain paired and the forecast stacks below. The Dining Dollars area pairs a balance/purchase form with term settings on desktop; phones stack these sections. Purchase history is a flat list with amounts and removal actions. Date fields stack at narrow widths.
+The centered desktop surface is 1140px wide with 28px side clearance. Hall estimates pair two primary statistics with a navy forecast panel. On phones, statistics remain paired and the forecast stacks below. The Dining Dollars area pairs a balance/purchase form with compact views for overview, purchase logging, activity and settings on a separate page. Shared header navigation marks the active Dining or Dining Dollars page. Purchase history is a flat list with amounts and removal actions. Date fields stack at narrow widths.
 
 ## Type and interaction
 
@@ -111,4 +111,4 @@ Use clear semibold headings, large tabular wait/balance values, short explanator
 
 ## Product truth
 
-The Edge shows hypothetical scan totals and explicit capacity/visit assumptions. Open seating is a rounded range; there are no seat maps, reservations, table controls, QR dialogs or manual checkout. Forecasts estimate seating waits, not food-line waits. Budget amounts are manually entered and stored in this browser; do not imply campus account integration. Keep the Village excluded and avoid prototype/demo/early-access interface labels.
+The Edge shows curated sample dining periods and a lunch-rush column chart. A small sample-data note provides context. Open seating is a rounded range; there are no seat maps, reservations, table controls, QR dialogs or manual checkout. Forecasts show sample dining waits. Budget amounts are manually entered and stored in this browser; do not imply campus account integration. Keep the Village excluded and avoid prototype/demo/early-access interface labels.

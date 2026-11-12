@@ -19,22 +19,35 @@ python3 -m venv /workspace/.blb-tools/venv
 /workspace/.blb-tools/venv/bin/python tests/smoke.py
 node --check app.js
 node --check data.js
+node --check dining.js
+node --check budget-model.js
+node tests/budget-model.cjs
 git diff --check
 ```
 
 `BLB_TEST_URL` overrides the target and `BLB_ARTIFACTS` the screenshot directory (default `/tmp/blb-test-artifacts`). No external runtime assets are required.
 
-## Wait estimates
+## Dining page
 
-The Edge has three hypothetical scan scenarios. Scan-ins minus scan-outs estimate people inside. Assumed capacity is 324 and average visit duration is 35 minutes; neither is a verified campus measurement. Above capacity, assumed seating turnover estimates a wait. Available seats are shown in rounded ranges rather than individual locations. Future waits project each scenario's assumed arrival rate and estimated departures; no learned predictive model is claimed. The expandable explanation provides editable scan totals. Negative occupancy is clamped and invalid scan totals are rejected. Waits refer to seating, not the food line.
+`index.html` uses curated sample data in `data.js` for three dining periods at The Edge. It displays dining waits, approximate seating, short-term waits, and a lunch-rush chart. The data is illustrative; a short sample-data note appears below the chart. The dining page has no budget form, scanner controls, or connection-status copy. The Village remains excluded.
 
-There are no table maps, seat reservations, manual student check-ins, or table QR flows. Old `?table=` links safely open the overview. The Village remains removed.
+## Dining Dollars page
 
-## Dining Dollars
+`dollars.html` is a separate page with Overview, Log purchase, Activity, and Settings views. It shares the existing browser storage key `better-lunch-budget-v2`, preserving previously saved balances and purchases.
 
-Inspired by [Dining Dollar Tracker](https://github.com/campjonas08-dotcom/Dining-dollar-tracker), inspected at `f6447d1f91ff4429b08a29a2acb35ddef3a20d66`. This integrated tracker provides a starting balance, total term budget, reserve, editable term dates, remaining weekday allowance, spending pace, quick purchase amounts, categories/notes, purchase removal, CSV export, browser persistence, and same-origin tab updates. It does not import that app's Firebase account configuration, service worker, multi-fund model, or cross-device sync.
+`budget-model.js` follows `computeStats` and `computeTodayTarget` in [Dining Dollar Tracker](https://github.com/campjonas08-dotcom/Dining-dollar-tracker), inspected at `f6447d1f91ff4429b08a29a2acb35ddef3a20d66`:
 
-Money uses integer cents. Balance = starting balance minus logged purchases. Remaining weekday allowance divides balance less reserve across weekdays from today (or term start, if later) to term end, inclusive. Weekends are excluded; holidays are included. Spending pace compares total-budget spending against elapsed weekdays. Dates use the visitor's local calendar. Purchases cannot exceed the remaining balance. Updating term settings preserves purchases; starting balance is the baseline before all purchases logged here. Browser storage key: `better-lunch-budget-v2`. No campus account balance is read. Storage failures show a visible warning and retain an in-memory session. Corrupt data is rejected without crashing.
+- School days are weekdays excluding configured skipped dates. An optional day-count override uses the first N school days in the term.
+- Daily spending budget = (total term budget − reserve) / school days.
+- Earned so far = daily spending budget × school days through today, inclusive.
+- Spending so far includes the difference between total budget and starting balance, plus logged purchases.
+- Available to spend = earned so far − spending so far. Unspent funds carry forward; negative availability indicates spending ahead of pace.
+- Suggested spending today divides positive available funds by remaining school days plus today if it is a school day, matching the reference repo's target calculation.
+- Account balance = starting balance − logged purchases. Projection uses average spending per elapsed school day, as in the reference.
+
+Purchase amounts use integer cents; accrual retains fractional cents until display. Daily funds are not recalculated from remaining balance. The tracker supports categories/notes, quick amounts, history removal, CSV export, local persistence, same-origin tab updates, and visible storage-failure warnings. Updating settings preserves purchases. Existing data without skip dates or an override continues to load. Dates use the visitor's calendar. Firebase/account sync and multiple funds are not integrated.
+
+Run `node tests/budget-model.cjs` for deterministic accrual tests in addition to the browser suite. Browser checks exercise both pages at the GitHub Pages subpath, all tracker views, persistence, CSV, validation, storage failures and responsive layouts.
 
 ## Publish
 

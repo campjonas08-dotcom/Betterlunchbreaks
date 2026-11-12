@@ -1,22 +1,9 @@
-/* Hypothetical hall scanner scenarios; no campus feed is connected. */
-window.Dining = (() => {
-  const scenarios = {
-    quiet: {label: 'Between classes', entries: 370, exits: 290, arrivals: 3},
-    lunch: {label: 'Lunch building', entries: 465, exits: 324, arrivals: 7},
-    rush: {label: 'Lunch rush', entries: 720, exits: 366, arrivals: 12}
-  };
-  function estimate(entries, exits, capacity, stay, arrivals) {
-    const inside = Math.max(0, entries - exits);
-    const seated = Math.min(capacity, inside), queue = Math.max(0, inside - capacity);
-    const turnover = capacity / stay;
-    const wait = inside < capacity ? 0 : Math.ceil((queue + 1) / turnover);
-    const open = capacity - seated;
-    const range = open === 0 ? 'Near capacity' : `${Math.max(0, Math.floor((open - 10) / 10) * 10)}–${Math.min(capacity, Math.ceil((open + 10) / 10) * 10)}`;
-    return {inside, seated, queue, wait, open, range, occupancy: seated / capacity,
-      forecast: [15, 30].map(minutes => {
-        const people = Math.max(0, inside + (arrivals - Math.min(inside / stay, turnover)) * minutes);
-        return {minutes, wait: people < capacity ? 0 : Math.ceil((people - capacity + 1) / turnover)};
-      })};
-  }
-  return {scenarios, estimate};
-})();
+/* Curated sample dining data. */
+window.Dining = {
+  scenarios: {
+    quiet: {wait: 3, range: '210–240', occupancy: .3, crowd: 'Quiet · plenty of room', next: [4, 6], tip: 'A good time to settle in.', copy: 'Grab a meal and enjoy a little breathing room before your next class.'},
+    lunch: {wait: 7, range: '50–70', occupancy: .81, crowd: 'Steady · seats available', next: [12, 5], tip: 'Have 25 minutes? Make a lunch of it.', copy: 'Allow about seven minutes before eating, plus time to walk back to class.'},
+    rush: {wait: 16, range: '0–20', occupancy: .96, crowd: 'Busy · limited seating', next: [11, 6], tip: 'Short break? Try a little later.', copy: 'The crowd eases after the rush. A to-go meal can help if your next class is close.'}
+  },
+  trend: [['10:30',3], ['11:00',5], ['11:30',9], ['12:00',16], ['12:30',12], ['1:00',7], ['1:30',4], ['2:00',3]]
+};

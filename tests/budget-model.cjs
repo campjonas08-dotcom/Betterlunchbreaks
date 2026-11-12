@@ -1,0 +1,16 @@
+const assert = require('node:assert/strict');
+global.window = {}; require('../budget-model.js');
+const stats = window.BudgetModel.stats;
+const budget = {total: 50000, starting: 40000, reserve: 5000, start: '2026-11-09', end: '2026-11-13', purchases: [{amount: 1200, date: '2026-11-12'}]};
+let s = stats(budget, '2026-11-12');
+assert.equal(s.daily, 9000); assert.equal(s.earned, 36000); assert.equal(s.available, 24800);
+assert.equal(s.balance, 38800); assert.equal(s.todaySpent, 1200); assert.equal(s.remaining, 1); assert.equal(s.target, 12400);
+s = stats(budget, '2026-11-08'); assert.equal(s.earned, 0); assert.equal(s.available, -11200);
+s = stats(budget, '2026-11-14'); assert.equal(s.earned, 45000); assert.equal(s.remaining, 0); assert.equal(s.projected, 38800);
+s = stats({...budget, holidays: ['2026-11-11']}, '2026-11-12'); assert.equal(s.totalDays, 4); assert.equal(s.daily, 11250); assert.equal(s.earned, 33750);
+s = stats({...budget, dayOverride: 3}, '2026-11-12'); assert.equal(s.totalDays, 3); assert.equal(s.daily, 15000); assert.equal(s.earned, 45000);
+s = stats({...budget, start: '2026-11-14', end: '2026-11-15'}, '2026-11-14'); assert.equal(s.daily, 0); assert.equal(s.earned, 0); assert.equal(s.target, null);
+const weekend = {...budget, end: '2026-11-20'};
+assert.equal(stats(weekend, '2026-11-13').earned, stats(weekend, '2026-11-15').earned);
+assert.equal(stats({...budget, starting: 0}, '2026-11-12').available, -15200);
+console.log('PASS daily accrual: today included, rollover, setup spending, reserve, skip days, day override, future/completed terms, weekends, negative pace, target and projection');
