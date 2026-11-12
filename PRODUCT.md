@@ -6,7 +6,7 @@ Give Auburn students a simple dining-day overview and a complete daily Dining Do
 
 ## Dining
 
-Use fixed, made-up wait/seating data. Lunch from 11:30 AM through 1 PM must be the busiest period, with smaller peaks at 9–10 AM and 5–6 PM. Show rough open seating, time selection, nearby waits and an all-day chart. Keep a small sample-data note without live-connection wording or editable scan inputs. The Edge is the supported hall; The Village, table selection and QR/manual check-ins remain removed.
+Use fixed, made-up people-inside counts and rough open seating as the primary metrics. Lunch from 11:30 AM through 1 PM must be the busiest period, with smaller peaks at 9–10 AM and 5–6 PM. Show time selection, nearby people-inside counts and an all-day occupancy chart. Keep estimated time to find a table as a smaller supporting detail; finding a table is the core task. Keep a small sample-data note without live-connection wording or editable scan inputs. The Edge is the supported hall; The Village, table selection and QR/manual check-ins remain removed.
 
 ## Tracker
 

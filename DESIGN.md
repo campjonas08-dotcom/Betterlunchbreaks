@@ -118,3 +118,6 @@ The Edge shows curated sample dining periods and a lunch-rush column chart. A sm
 Dining now shows a fixed all-day schedule with lunch as the highest peak and smaller breakfast/dinner peaks. Meal-period summaries make the timing obvious. The chart scrolls internally on phones and each column selects a time.
 
 The tracker uses the reference app's complete compact UI, navigation, sheets, insights and history rather than the earlier simplified forms. `tracker/auburn.css` maps its palette and typography into the existing navy/orange Barlow identity. A shared site header links back to dining, while the source app's Home, Log, Insights and Settings controls remain available at the bottom. Toasts sit above those controls. Daily budget and available earned funds remain distinct, with the original calculations preserved.
+
+
+The dining headline metric, nearby-time panel and daily chart now show people inside. Rough open seating accompanies that count; estimated time to find a table sits below the statistics as small supporting text. Peak-period summaries use crowd counts rather than minutes.

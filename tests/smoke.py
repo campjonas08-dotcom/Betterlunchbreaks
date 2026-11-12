@@ -10,12 +10,16 @@ with sync_playwright() as p:
         context=browser.new_context(viewport={'width':width,'height':900},accept_downloads=True)
         page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto(BASE)
+        expect(page.locator('#people-count')).to_have_text('309')
         expect(page.locator('#wait-count')).to_have_text('25')
         expect(page.locator('#open-count')).to_have_text('5–25')
         assert page.locator('#rush-chart button').count()==19
-        for slot,wait in [('3','13'),('7','19'),('9','23'),('10','18'),('12','3'),('15','16')]:
-            page.locator('#dining-time').select_option(slot);expect(page.locator('#wait-count')).to_have_text(wait)
-        page.get_by_role('button',name='12:00 PM, 25 minute wait',exact=True).click()
+        expect(page.locator('#forecast')).to_contain_text('people')
+        assert 'min wait' not in page.locator('#forecast').inner_text()
+        for slot,people in [('3','219'),('7','284'),('9','299'),('10','279'),('12','79'),('15','254')]:
+            page.locator('#dining-time').select_option(slot);expect(page.locator('#people-count')).to_have_text(people)
+        page.get_by_role('button',name='12:00 PM, 309 people inside',exact=True).click()
+        expect(page.locator('#people-count')).to_have_text('309')
         expect(page.locator('#wait-count')).to_have_text('25')
         assert 'live' not in page.locator('body').inner_text().lower()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

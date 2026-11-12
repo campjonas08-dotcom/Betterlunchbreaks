@@ -15,3 +15,7 @@ Fixed all-day dining values with the highest waits at 11:30 AM–1 PM and smalle
 ## Boundaries
 
 Dining values are invented examples. The tracker runs locally without the reference Firebase project or an origin-wide service worker. Cross-device access uses backup/restore. Physical-device testing and direct public Pages browsing are not claimed. Deployment status is verified separately through the existing GitHub Pages workflow.
+
+## People-inside emphasis
+
+Updated the primary dining number, nearby-time panel, chart values/heights/accessible labels, peak-period summaries and recommendations to emphasize people inside and finding a table. Open seating is consistently derived from the sample capacity minus occupants. Estimated time to find a table remains as supporting text below the main statistics. The revised browser suite passed all desktop/phone/narrow flows and now asserts occupancy counts and chart labels in addition to the retained table-wait detail. Phone rendering was visually inspected. Tracker code remains unchanged.

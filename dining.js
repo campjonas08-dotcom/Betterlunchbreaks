@@ -4,26 +4,27 @@
   $('dining-time').value='8';
   function render() {
     const index=Number($('dining-time').value), s=day[index], lunch=index>=7&&index<=10;
-    $('wait-count').textContent=s.wait;
-    $('open-count').textContent=`${Math.max(0,s.open-10)}–${s.open+10}`;
-    $('wait-detail').textContent=lunch?'The busiest stretch of the day.':s.wait>=10?'A mealtime crowd is settling in.':'A quieter time to grab a meal.';
-    $('crowd').textContent=lunch?'Lunch rush':s.wait>=10?'Mealtime peak':'Plenty of breathing room';
-    const full=Math.round((324-s.open)/324*100); $('meter-fill').style.width=`${full}%`; $('occupancy').textContent=`About ${full}% full`;
-    $('recommendation-title').textContent=s.wait>=18?'Tight schedule? Come after 1.':s.wait>=10?'Leave a little extra time.':'A good time for a quick lunch.';
-    $('recommendation-copy').textContent=s.wait>=18?'Lunch is busiest from 11:30 AM to 1 PM. Try 2 PM for a shorter wait.':s.wait>=10?'Breakfast peaks around 9–10 AM, and dinner around 5–6 PM. Plan your break around the crowd.':'Find a spot, enjoy your food, and head back to class without the rush.';
+    $('people-count').textContent=s.people; $('wait-count').textContent=s.wait;
+    const open=window.Dining.capacity-s.people;
+    $('open-count').textContent=`${Math.max(0,open-10)}–${Math.min(window.Dining.capacity,open+10)}`;
+    $('crowd-detail').textContent=lunch?'The busiest stretch of the day.':s.people>=180?'A mealtime crowd is settling in.':'A quieter time to grab a meal.';
+    $('crowd').textContent=lunch?'Lunch rush':s.people>=180?'Mealtime peak':'Plenty of breathing room';
+    const full=Math.round(s.people/window.Dining.capacity*100); $('meter-fill').style.width=`${full}%`; $('occupancy').textContent=`About ${full}% full`;
+    $('recommendation-title').textContent=s.people>=275?'Need a table? Try after the lunch rush.':s.people>=180?'The hall is filling up.':'More room to sit down and settle in.';
+    $('recommendation-copy').textContent=s.people>=275?'Lunch is most crowded from 11:30 AM to 1 PM. Come around 2 PM for more open seating.':s.people>=180?'Breakfast peaks around 9–10 AM, and dinner around 5–6 PM. Quieter times give you more choice of tables.':'Fewer people inside means a better chance of finding a table together.';
     $('forecast').replaceChildren(...day.slice(index, index+3).map((slot,i)=>{
       const row=document.createElement('div'); if(!i)row.className='forecast-now';
       const label=document.createElement('span');label.textContent=slot.time;
-      const value=document.createElement('strong');value.textContent=`~${slot.wait}`;
-      const unit=document.createElement('small');unit.textContent='min wait';row.append(label,value,unit);return row;
+      const value=document.createElement('strong');value.textContent=String(slot.people);
+      const unit=document.createElement('small');unit.textContent='people';row.append(label,value,unit);return row;
     }));
     document.querySelectorAll('.rush-column').forEach((bar,i)=>{bar.classList.toggle('selected-time',i===index);});
   }
   $('rush-chart').replaceChildren(...day.map((slot,i)=>{
-    const column=document.createElement('button');column.type='button';column.className=`rush-column ${i>=7&&i<=10?'lunch-peak':slot.wait>=10?'meal-peak':''}`;
-    column.setAttribute('aria-label',`${slot.time}, ${slot.wait} minute wait`);
-    const bar=document.createElement('span');bar.className='rush-bar';bar.style.height=`${slot.wait*5}px`;
-    const value=document.createElement('strong');value.textContent=slot.wait;bar.append(value);
+    const column=document.createElement('button');column.type='button';column.className=`rush-column ${i>=7&&i<=10?'lunch-peak':slot.people>=180?'meal-peak':''}`;
+    column.setAttribute('aria-label',`${slot.time}, ${slot.people} people inside`);
+    const bar=document.createElement('span');bar.className='rush-bar';bar.style.height=`${slot.people/window.Dining.capacity*150}px`;
+    const value=document.createElement('strong');value.textContent=slot.people;bar.append(value);
     const label=document.createElement('span');label.textContent=slot.time.replace(':00','').replace(' AM','a').replace(' PM','p');
     column.append(bar,label);column.addEventListener('click',()=>{$('dining-time').value=i;render();});return column;
   }));

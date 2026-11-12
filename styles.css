@@ -313,3 +313,5 @@ input[type=date] { min-width: 0; }
 .rush-column.lunch-peak .rush-bar {background:var(--orange);color:var(--navy);}
 .rush-column.selected-time > span:last-child {font-weight:600;color:var(--orange-ink);text-decoration:underline;text-underline-offset:4px;}
 @media(max-width:760px){.meal-periods{gap:12px;grid-template-columns:1fr;}.meal-periods>div{display:grid;grid-template-columns:1fr auto;gap:2px 15px;padding:13px 0;}.meal-periods strong{font-size:19px;margin:0;}.meal-periods small{grid-column:1/-1;}.rush-chart{gap:9px;}}
+.table-wait { margin-top:14px; font-size:14px; color:var(--muted); }
+.table-wait strong { color:var(--text); font-weight:600; white-space:nowrap; }
