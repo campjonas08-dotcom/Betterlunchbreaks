@@ -19,3 +19,9 @@ Dining values are invented examples. The tracker runs locally without the refere
 ## People-inside emphasis
 
 Updated the primary dining number, nearby-time panel, chart values/heights/accessible labels, peak-period summaries and recommendations to emphasize people inside and finding a table. Open seating is consistently derived from the sample capacity minus occupants. Estimated time to find a table remains as supporting text below the main statistics. The revised browser suite passed all desktop/phone/narrow flows and now asserts occupancy counts and chart labels in addition to the retained table-wait detail. Phone rendering was visually inspected. Tracker code remains unchanged.
+
+## Automatic Auburn time and consistent seating
+
+Removed time selection and chart interaction. The dashboard now interpolates the sample crowd pattern from the current America/Chicago time (Auburn), refreshes every 30 seconds and on focus/return, and calculates every current metric from one rounded occupancy snapshot. Open seats equal 324 minus people inside. The table-wait estimate uses that same occupancy and is capped at 10 minutes. Forecasts calculate current, +15 and +30 minute snapshots using the same model.
+
+`node tests/dining-model.cjs` passed all 1,440 minutes for bounded occupancy, exact occupancy-plus-seats totals, wait cap, invariant seating for equal occupancy, interpolation, midnight and CST/CDT conversion. Browser tests used a controlled clock and passed on desktop/phone/narrow: noon 309 inside/15 open, 12:20 302/22, and 12:40 292/32, with no user selector and a matching current forecast. The full tracker and migration/storage checks also passed. Phone rendering was visually inspected after this change.

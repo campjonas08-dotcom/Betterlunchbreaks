@@ -1,5 +1,6 @@
 """Dining schedule and full ported tracker acceptance checks."""
 import os,json
+from datetime import datetime, timezone
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 BASE=os.environ.get('BLB_TEST_URL','http://127.0.0.1:8000/Betterlunchbreaks/')
@@ -9,18 +10,25 @@ with sync_playwright() as p:
     for label,width in [('desktop',1440),('phone',390),('narrow',320)]:
         context=browser.new_context(viewport={'width':width,'height':900},accept_downloads=True)
         page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        page.clock.install(time=datetime(2026,11,12,18,0,tzinfo=timezone.utc))
         page.goto(BASE)
         expect(page.locator('#people-count')).to_have_text('309')
-        expect(page.locator('#wait-count')).to_have_text('25')
-        expect(page.locator('#open-count')).to_have_text('5–25')
-        assert page.locator('#rush-chart button').count()==19
-        expect(page.locator('#forecast')).to_contain_text('people')
-        assert 'min wait' not in page.locator('#forecast').inner_text()
-        for slot,people in [('3','219'),('7','284'),('9','299'),('10','279'),('12','79'),('15','254')]:
-            page.locator('#dining-time').select_option(slot);expect(page.locator('#people-count')).to_have_text(people)
-        page.get_by_role('button',name='12:00 PM, 309 people inside',exact=True).click()
-        expect(page.locator('#people-count')).to_have_text('309')
-        expect(page.locator('#wait-count')).to_have_text('25')
+        expect(page.locator('#wait-count')).to_have_text('10')
+        expect(page.locator('#open-count')).to_have_text('15')
+        expect(page.locator('#dining-clock')).to_contain_text('12:00 PM')
+        expect(page.locator('#dining-time')).to_have_count(0)
+        expect(page.locator('#rush-chart button')).to_have_count(0)
+        assert page.locator('#rush-chart [role=listitem]').count()==19
+        expect(page.locator('#forecast > div').first.locator('strong')).to_have_text('309')
+        page.clock.fast_forward(20*60*1000)
+        expect(page.locator('#people-count')).to_have_text('302')
+        expect(page.locator('#open-count')).to_have_text('22')
+        expect(page.locator('#dining-clock')).to_contain_text('12:20 PM')
+        expect(page.locator('#forecast > div').first.locator('strong')).to_have_text('302')
+        page.clock.fast_forward(20*60*1000)
+        expect(page.locator('#people-count')).to_have_text('292')
+        expect(page.locator('#open-count')).to_have_text('32')
+        assert int(page.locator('#wait-count').inner_text())<=10
         assert 'live' not in page.locator('body').inner_text().lower()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.locator('h1').click();page.screenshot(path=str(ARTIFACTS/f'{label}-daily-dining.png'),full_page=True)
@@ -64,7 +72,7 @@ with sync_playwright() as p:
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.locator('h1').click();page.screenshot(path=str(ARTIFACTS/f'{label}-full-tracker.png'),full_page=True)
         assert not errors,errors
-        print(f'PASS {label}: all-day dining peaks, chart selection, full tracker onboarding, daily metrics, purchase/edit/delete, persistence, insights, balance correction, CSV/backup/restore, holidays, multiple funds, themes, keyboard sheets and layout')
+        print(f'PASS {label}: automatic Auburn time, synchronized occupancy/seats over 40 minutes, bounded table wait, full tracker onboarding, daily metrics, purchase/edit/delete, persistence, insights, balance correction, CSV/backup/restore, holidays, multiple funds, themes, keyboard sheets and layout')
         context.close()
     # Prior release data survives the full tracker port.
     context=browser.new_context();page=context.new_page();page.goto(BASE)

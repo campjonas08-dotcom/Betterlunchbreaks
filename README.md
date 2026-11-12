@@ -17,6 +17,7 @@ cd /workspace/Betterlunchbreaks
 python3 -m venv /workspace/.blb-tools/venv
 /workspace/.blb-tools/venv/bin/python -m pip install -r tests/requirements.txt
 node tests/budget-model.cjs
+node tests/dining-model.cjs
 /workspace/.blb-tools/venv/bin/python tests/smoke.py
 node --check tracker/app.js
 node --check dining.js
@@ -28,7 +29,7 @@ git diff --check
 
 ## Dining dashboard
 
-`data.js` contains fixed example people-inside counts and supporting table-wait numbers from 7 AM through 8 PM. Lunch has the most people inside (11:30 AM–1 PM, about 280–310 people), with smaller breakfast (9–10 AM, about 190–220 people) and dinner (5–6 PM, about 210–255 people) peaks. `dining.js` displays the chosen time's people-inside count, rough open seating, nearby occupancy counts and a selectable all-day crowd chart. Estimated time to find a table appears only as supporting text. Numbers are made up for the planning concept; a small sample-data note supplies context. No scanner controls, connection-status copy, table maps, or QR check-in remains. The Village stays removed.
+`data.js` contains fixed example people-inside counts and supporting table-wait numbers from 7 AM through 8 PM. Lunch has the most people inside (11:30 AM–1 PM, about 280–310 people), with smaller breakfast (9–10 AM, about 190–220 people) and dinner (5–6 PM, about 210–255 people) peaks. `dining.js` automatically follows Auburn time (`America/Chicago`, including daylight saving), refreshing every 30 seconds and when the tab regains focus. It interpolates the sample crowd pattern minute by minute. People inside, open seats, percent full, table wait and +15/+30-minute forecasts come from the same snapshot. Open seats always equal 324 minus the displayed people count. Table wait is capped at 10 minutes, remains secondary, and is based on the same occupancy. The all-day chart is informational; there is no time selector. Numbers are made up for the planning concept; a small sample-data note supplies context. No scanner controls, connection-status copy, table maps, or QR check-in remains. The Village stays removed.
 
 ## Full Dining Dollars app
 

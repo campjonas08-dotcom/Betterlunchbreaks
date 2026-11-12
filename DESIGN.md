@@ -121,3 +121,6 @@ The tracker uses the reference app's complete compact UI, navigation, sheets, in
 
 
 The dining headline metric, nearby-time panel and daily chart now show people inside. Rough open seating accompanies that count; estimated time to find a table sits below the statistics as small supporting text. Peak-period summaries use crowd counts rather than minutes.
+
+
+The dashboard now follows Auburn time automatically, including DST. A compact clock replaces time selection. The daily chart is informational. Current occupancy and open seats derive from one snapshot, with table wait capped at 10 minutes. Nearby-time estimates always show Now, In 15 min and In 30 min.
